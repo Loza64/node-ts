@@ -1,0 +1,37 @@
+import debug from "debug";
+import { config } from "dotenv";
+import multer, { memoryStorage } from "multer";
+
+config();
+
+export const server = debug("application:[server]");
+export const error = debug("application:[error]");
+export const database = debug("application:[database]");
+export const input = debug("application:[input]");
+
+export const { port, origin } = process.env
+
+export const corsconfig = {
+    origin: origin || null,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+}
+
+export const jsonConfig = {
+    limit: "10mb", //payload limit
+    strict: true, //only json
+    inflate: true, //accept gzip and inflate
+    reviver: null, //accept function parser to json
+    type: "application/json"
+}
+
+export const urlencodeconfig = {
+    extended: true,
+    limit: "10mb",
+    parameterLimit: 1000
+}
+
+export const upload = multer({
+    storage: memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 }
+})
