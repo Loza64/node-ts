@@ -39,6 +39,17 @@ router.post('/upload', upload.single('file'), uploadFile);  // 'file' es el nomb
 router.post('/upload-multiple', upload.array('files', 3), uploadMultipleFiles);
 ```
 
+### middleware
+
+en la carpeta middleware cree un archivo validator.dto.ts la cual se encarga de validar los datos de las clases dto
+solamente hay que importarlo usarlo asi:
+
+```post.route.ts
+router.post('/users', validateDto(CreateUserDto), (req, res) => {
+  res.json({ message: '¡Usuario validado con éxito!', data: req.body });
+});
+```
+
 ### Nota
 
 esta aplicacion es de uso libre
