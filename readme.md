@@ -23,7 +23,7 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 
 ```.env  
 post=4000  
-domain=http://localhost:12312  (aplicacion del front)
+origin=http://localhost:12312  (aplicacion del front)
 ```
 
 ### multer
