@@ -19,7 +19,7 @@ export const corsconfig = {
 
 export const jsonConfig = {
     limit: "10mb", //payload limit
-    strict: true, //only json
+    strict: false, //only json
     inflate: true, //accept gzip and inflate
     reviver: null, //accept function parser to json
     type: "application/json"
