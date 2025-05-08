@@ -54,6 +54,25 @@ router.post('/users', validateDto(CreateUserDto), (req, res) => {
 
 En el archivo config.ts se encuentra la configuración principal de la aplicación. Desde allí, podrás importar las variables de entorno, como el port (puerto) y el origin (origen), así como los ajustes de debug. Ten en cuenta que el modo debug solo estará activo cuando la aplicación se ejecute en modo de desarrollo (es decir, al compilarla como dev), un ejemplo esta en index.ts.
 
+### api
+
+en tu navegador coloca la siguiente ruta: "<http://localhost:3000/server/rest/api/fetch/json/request/get/hello>" lo cual es donde esta el hola mundo del backend, en la carpeta, se encuentran todos los metodos: post, get, put, etc, la ruta general del proyecto es: "<http://localhost:3000/server/rest/api/fetch/json/request/>" cuando agreges algo al post, segun lo que pongas en tu ruta siempre comenzara a apartir de "request/ por ejemplo:
+
+```http
+GET    http://localhost:3000/server/rest/api/fetch/json/request/get/users
+POST   http://localhost:3000/server/rest/api/fetch/json/request/post/login
+PUT    http://localhost:3000/server/rest/api/fetch/json/request/put/user/123
+DELETE http://localhost:3000/server/rest/api/fetch/json/request/delete/user/123
+```
+
+, eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app,ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
+
+```app.ts
+app.use(express.urlencoded(urlencodeconfig));
+app.use(morgan("dev"))
+app.use('/server/rest/api/fetch/json/request', router)
+```
+
 ### Nota
 
 esta aplicacion es de uso libre, solo recuerda borrar la carpeta .git despues de clonar el ropsitorio para que no tengas problemas a la hora de subir tu backend a github, normalmente la carpeta .git esta oculta

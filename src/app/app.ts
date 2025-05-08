@@ -1,6 +1,6 @@
 import express from 'express';
 import morgan from 'morgan';
-import router from './routes/index.route';
+import router from './routes/_index.route';
 import { corsconfig, jsonConfig, urlencodeconfig } from './config';
 import cors from 'cors'
 import helmet from 'helmet';
