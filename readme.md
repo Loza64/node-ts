@@ -65,7 +65,7 @@ PUT    http://localhost:3000/server/rest/api/fetch/json/request/put/user/123
 DELETE http://localhost:3000/server/rest/api/fetch/json/request/delete/user/123
 ```
 
-, eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app,ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
+, eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
 
 ```app.ts
 app.use(express.urlencoded(urlencodeconfig));
