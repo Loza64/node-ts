@@ -20,7 +20,8 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "morgan": "^1.10.0",
-    "multer": "^1.4.5-lts.2"
+    "multer": "^1.4.5-lts.2",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -31,6 +32,7 @@
     "@types/jest": "^29.5.14",
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.12",
+    "@types/reflect-metadata": "^0.0.5",
     "cross-env": "^7.0.3",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.2",
