@@ -20,12 +20,14 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 - **class-transformer**: Transformar objetos planos (como JSON) en instancias de clases TypeScript (y viceversa).
 
 ### crear un archivo .env
+
 ```.env  
 post=4000  
 origin=http://localhost:12312  (aplicacion del front)
 ```
 
 ### multer
+
 en le archivo config.ts ya se encuentra la constante upload donde ya esta configurada multer lista para exportar
 y usarlo como quiera por ejemplo:
 
@@ -38,6 +40,7 @@ router.post('/upload-multiple', upload.array('files', 3), uploadMultipleFiles);
 ```
 
 ### middleware
+
 en la carpeta middleware cree un archivo validator.dto.ts la cual se encarga de validar los datos de las clases dto
 solamente hay que importarlo usarlo asi:
 
@@ -48,7 +51,9 @@ router.post('/users', validateDto(CreateUserDto), (req, res) => {
 ```
 
 ### configuracion
+
 En el archivo config.ts se encuentra la configuración principal de la aplicación. Desde allí, podrás importar las variables de entorno, como el port (puerto) y el origin (origen), así como los ajustes de debug. Ten en cuenta que el modo debug solo estará activo cuando la aplicación se ejecute en modo de desarrollo (es decir, al compilarla como dev), un ejemplo esta en index.ts.
 
 ### Nota
+
 esta aplicacion es de uso libre, solo recuerda borrar la carpeta .git despues de clonar el ropsitorio para que no tengas problemas a la hora de subir tu backend a github, normalmente la carpeta .git esta oculta
