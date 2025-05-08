@@ -22,7 +22,7 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 ### crear un archivo .env
 
 ```.env  
-post=4000  
+port=4000  
 origin=http://localhost:12312  (aplicacion del front)
 ```
 
