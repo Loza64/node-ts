@@ -93,7 +93,7 @@ app.use(morgan("dev"))
 app.use('/server/rest/api/fetch/json/request', router)
 ```
 
-### Mensajes en consola en modo desarrollo
+### Mensajes en terminal en modo desarrollo
 
 Puedes importar estas constantes que se encuentran en config.ts para agregar mensajes en la consola y puedes crear unas nueva,
 
