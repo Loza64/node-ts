@@ -75,4 +75,4 @@ app.use('/server/rest/api/fetch/json/request', router)
 
 ### Nota
 
-esta aplicacion es de uso libre, solo recuerda borrar la carpeta .git despues de clonar el ropsitorio para que no tengas problemas a la hora de subir tu backend a github, normalmente la carpeta .git esta oculta
+esta aplicacion es de uso libre, solo recuerda borrar la carpeta .git despues de clonar el repositorio para que no tengas problemas a la hora de subir tu backend a github, normalmente la carpeta .git esta oculta
