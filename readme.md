@@ -95,13 +95,13 @@ app.use('/server/rest/api/fetch/json/request', router)
 
 ### Mensajes en terminal en modo desarrollo
 
-Puedes importar estas constantes que se encuentran en config.ts para agregar mensajes en la consola y puedes crear unas nueva,
+Puedes importar estas constantes que se encuentran en config.ts para agregar mensajes en la consola y puedes crear mas a tu gusto por ejemplo: const ejemplo = debug("nodets:[ejemplo]");
 
 ```config.ts
-export const server = debug("application:[server]");
-export const error = debug("application:[error]");
-export const database = debug("application:[database]");
-export const input = debug("application:[input]");
+export const server = debug("nodets:[server]");
+export const error = debug("nodets:[error]");
+export const database = debug("nodets:[database]");
+export const input = debug("nodets:[input]");
 ```
 
 se utiliza de esta forma:
@@ -113,10 +113,30 @@ server("running in port", 3000)
 lo cual en la terminal te saldra:
 
 ```terminal
-application:[server] running in port 3000 +0ms
+nodets:[server] running in port 3000 +0ms
 ```
 
-esto solo funciona cuando el proyecto esta en modo desarrollo
+esto solo funciona cuando el proyecto esta en modo desarrollo.
+
+si el quiers cambiar el nodets: por algo mas puedes hacer en package.json
+
+```package.json
+"dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
+```
+
+remplaza nodets por la palabra que tu quiera pero asegurta que las demas constantes tenga eso mismo de lo contrario
+no te aparecera el mensaje, ejemplo
+
+```package.json
+"dev": "cross-env DEBUG=app:* ts-node-dev src/index.ts",
+```
+
+```config.ts
+export const server = debug("app:[server]");
+export const error = debug("app:[error]");
+export const database = debug("app:[database]");
+export const input = debug("app:[input]");
+```
 
 ### Nota
 

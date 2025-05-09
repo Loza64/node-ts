@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "jest",
-    "dev": "cross-env DEBUG=application:* ts-node-dev src/index.ts",
+    "dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
     "start": "node build/index.js",
     "build": "tsc"
   },

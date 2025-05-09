@@ -4,10 +4,10 @@ import multer, { memoryStorage } from "multer";
 
 config();
 
-export const server = debug("application:[server]");
-export const error = debug("application:[error]");
-export const database = debug("application:[database]");
-export const input = debug("application:[input]");
+export const server = debug("nodets:[server]");
+export const error = debug("nodets:[error]");
+export const database = debug("nodets:[database]");
+export const input = debug("nodets:[input]");
 
 export const { port, origin } = process.env
 
