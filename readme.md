@@ -3,6 +3,12 @@
 Este  es un proyecto inicializado de nodejs usando typescript, con el fin de
 ya tener la aplicacion inicializado con el motor express junto con sus configuraciones principales
 
+## Comandos
+
+- **npm run dev** : ejecucion de la aplicacion en modo de desarrollo
+- **npm run build** : preparar el proyecto para produccion
+- **npm start** : ejecucion de la aplicacion en produccion
+
 ## librerias instaladas
 
 - **express** : Framework web para Node.js que simplifica la creación de APIs REST y servidores HTTP.
@@ -20,6 +26,20 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 - **class-transformer**: Transformar objetos planos (como JSON) en instancias de clases TypeScript (y viceversa).
 
 ### crear un archivo .env
+
+```repositorio
+node-ts/
+├── node_modules/       
+├── src/ 
+├── .env                     
+├── .gitignore   
+├── README.md                 
+├── package.json  
+├── package-lock.json
+├── tsconfig.json
+├── tslint.json    
+└── requirements.txt         
+```
 
 ```.env  
 port=4000  
@@ -65,13 +85,38 @@ PUT    http://localhost:3000/server/rest/api/fetch/json/request/put/user/123
 DELETE http://localhost:3000/server/rest/api/fetch/json/request/delete/user/123
 ```
 
-, eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
+Eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
 
 ```app.ts
 app.use(express.urlencoded(urlencodeconfig));
 app.use(morgan("dev"))
 app.use('/server/rest/api/fetch/json/request', router)
 ```
+
+### Mensajes en consola en modo desarrollo
+
+Puedes importar estas constantes que se encuentran en config.ts para agregar mensajes en la consola y puedes crear unas nueva,
+
+```config.ts
+export const server = debug("application:[server]");
+export const error = debug("application:[error]");
+export const database = debug("application:[database]");
+export const input = debug("application:[input]");
+```
+
+se utiliza de esta forma:
+
+```index.ts
+server("running in port", 3000)
+```
+
+lo cual en la terminal te saldra:
+
+```terminal
+application:[server] running in port 3000 +0ms
+```
+
+esto solo funciona cuando el proyecto esta en modo desarrollo
 
 ### Nota
 
