@@ -118,7 +118,7 @@ nodets:[server] running in port 3000 +0ms
 
 esto solo funciona cuando el proyecto esta en modo desarrollo.
 
-si el quiers cambiar el nodets: por algo mas puedes hacer en package.json
+si quieres cambiar el nodets: por algo mas puedes hacer en package.json
 
 ```package.json
 "dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
