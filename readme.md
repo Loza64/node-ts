@@ -124,7 +124,7 @@ si quieres cambiar el nodets: por algo mas tienes que modificar el package.json
 "dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
 ```
 
-remplaza nodets por la palabra que tu quiera pero asegurta que las demas constantes tenga eso mismo de lo contrario
+remplaza nodets por la palabra que tu quieras pero asegurate que las demas constantes tenga eso mismo de lo contrario
 no te aparecera el mensaje, ejemplo
 
 ```package.json
