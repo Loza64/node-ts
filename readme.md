@@ -5,9 +5,9 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 
 ## Comandos
 
-- **npm run dev** : ejecucion de la aplicacion en modo de desarrollo
-- **npm run build** : preparar el proyecto para produccion
-- **npm start** : ejecucion de la aplicacion en produccion
+- **pnpm run dev** : ejecucion de la aplicacion en modo de desarrollo
+- **pnpm run build** : preparar el proyecto para produccion
+- **pnpm start** : ejecucion de la aplicacion en produccion
 
 ## librerias instaladas
 
