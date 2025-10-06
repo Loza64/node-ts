@@ -53,10 +53,7 @@ y usarlo como quiera por ejemplo:
 
 ```post.route.ts
 // Ruta POST para subir un solo archivo
-router.post('/upload', upload.single('file'), uploadFile);  // 'file' es el nombre del campo en el form-data
-
-// Ruta POST para múltiples archivos (opcional)
-router.post('/upload-multiple', upload.array('files', 3), uploadMultipleFiles);
+router.post('/upload/files', uploadFile, uploadFilesCloud);
 ```
 
 ### middleware
