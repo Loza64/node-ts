@@ -1,6 +1,6 @@
 import multer, { MulterError } from "multer";
 import type { Request, Response, NextFunction } from "express";
-import { NormalizedRequest } from "../utils/normaliza";
+import { NormalizedRequest } from "../utils/normalize";
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
