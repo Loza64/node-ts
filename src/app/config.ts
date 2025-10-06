@@ -9,7 +9,7 @@ export const error = debug("nodets:[error]");
 export const database = debug("nodets:[database]");
 export const input = debug("nodets:[input]");
 
-export const { port, origin } = process.env
+export const { port = 5000, origin } = process.env
 
 export const corsconfig = {
     origin: origin || null,
@@ -18,16 +18,16 @@ export const corsconfig = {
 }
 
 export const jsonConfig = {
-    limit: "10mb", //payload limit
-    strict: false, //only json
-    inflate: true, //accept gzip and inflate
-    reviver: null, //accept function parser to json
+    limit: "10mb",
+    strict: false,
+    inflate: true,
+    reviver: null,
     type: "application/json"
 }
 
 export const urlencodeconfig = {
     extended: true,
-    limit: "10mb",
+    limit: "50mb",
     parameterLimit: 1000
 }
 
