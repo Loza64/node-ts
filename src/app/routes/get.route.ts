@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { hello } from '../controller/rest.controller';
+import { hello, notifyAll } from '../controller/rest.controller';
 
 const router = Router();
 
 router.get("/hello", hello);
+router.get("/notify", notifyAll);
 
 export default router;

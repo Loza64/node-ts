@@ -4,15 +4,16 @@ import { config } from "dotenv";
 config();
 
 export const server = debug("nodets:[server]");
+export const socketIO = debug("nodets:[socket]");
 export const errorLog = debug("nodets:[error]");
 export const database = debug("nodets:[database]");
 export const input = debug("nodets:[input]");
 
-export const { port = 5000, origin } = process.env;
+export const { PORT = 4000, ORIGIN } = process.env;
 
 export const corsConfig = {
-  origin: origin || false,
-  credentials: true,
+  origin: ORIGIN || '*',
+  credentials: !!ORIGIN,
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 

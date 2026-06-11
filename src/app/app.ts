@@ -9,7 +9,6 @@ import { corsConfig, jsonConfig, urlEncodeConfig } from './config';
 
 const app = express();
 
-// Seguridad y parseo
 app.use(helmet());
 app.use(cors(corsConfig));
 app.use(express.json(jsonConfig));

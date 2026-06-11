@@ -20,9 +20,11 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.0",
     "helmet": "^8.1.0",
+    "http": "0.0.1-security",
     "morgan": "^1.10.1",
     "multer": "2.0.2",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -31,6 +33,7 @@
     "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
+    "@types/socket.io": "^3.0.2",
     "cross-env": "^10.1.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.4",

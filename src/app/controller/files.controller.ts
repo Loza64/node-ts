@@ -12,6 +12,5 @@ export const uploadFilesCloud = (req: Request, res: Response, _next: NextFunctio
 };
 
 export const createUser = (req: Request, res: Response, _next: NextFunction): void => {
-  // req.body ya fue validado por validateDTO(CreateUserDto)
   res.status(201).json({ message: "User created", data: req.body });
 };
