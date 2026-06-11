@@ -73,21 +73,21 @@ En el archivo config.ts se encuentra la configuraci√≥n principal de la aplicaci√
 
 ### api
 
-en tu navegador coloca la siguiente ruta: "<http://localhost:3000/server/rest/api/fetch/json/request/get/hello>" lo cual es donde esta el hola mundo del backend, en la carpeta, se encuentran todos los metodos: post, get, put, etc, la ruta general del proyecto es: "<http://localhost:3000/server/rest/api/fetch/json/request/>" cuando agreges algo al post, segun lo que pongas en tu ruta siempre comenzara a apartir de "request/ por ejemplo:
+en tu navegador coloca la siguiente ruta: "<http://localhost:3000/api/get/hello>" lo cual es donde esta el hola mundo del backend, en la carpeta, se encuentran todos los metodos: post, get, put, etc, la ruta general del proyecto es: "<http://localhost:3000/api/>" cuando agreges algo al post, segun lo que pongas en tu ruta siempre comenzara a apartir de "request/ por ejemplo:
 
 ```http
-GET    http://localhost:3000/server/rest/api/fetch/json/request/get/users
-POST   http://localhost:3000/server/rest/api/fetch/json/request/post/login
-PUT    http://localhost:3000/server/rest/api/fetch/json/request/put/user/123
-DELETE http://localhost:3000/server/rest/api/fetch/json/request/delete/user/123
+GET    http://localhost:3000/api/get/users
+POST   http://localhost:3000/api/post/login
+PUT    http://localhost:3000/api/put/user/123
+DELETE http://localhost:3000/api/delete/user/123
 ```
 
-Eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /server/rest/api/fetch/json/request/.
+Eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /api/.
 
 ```app.ts
 app.use(express.urlencoded(urlencodeconfig));
 app.use(morgan("dev"))
-app.use('/server/rest/api/fetch/json/request', router)
+app.use('/api', router)
 ```
 
 ### Mensajes en terminal en modo desarrollo
@@ -133,6 +133,14 @@ export const server = debug("app:[server]");
 export const error = debug("app:[error]");
 export const database = debug("app:[database]");
 export const input = debug("app:[input]");
+```
+
+para las excepciones el response sera:
+```
+{
+  "status": 401,
+  "message": "Error message"
+}
 ```
 
 ### Nota

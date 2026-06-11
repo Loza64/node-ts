@@ -17,7 +17,7 @@ app.use(express.urlencoded(urlEncodeConfig));
 app.use(morgan("dev"));
 
 
-app.use('/api', router);
+app.use('/api/', router);
 
 app.use(errorHandler);
 
