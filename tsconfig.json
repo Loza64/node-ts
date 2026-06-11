@@ -2,13 +2,14 @@
   "compilerOptions": {
     "module": "CommonJS",
     "target": "esnext",
-    "sourceMap": true, 
+    "sourceMap": true,
     "outDir": "build",
     "rootDir": "src",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true
-  }, 
+    "skipLibCheck": true,
+    "typeRoots": ["./src/@types", "./node_modules/@types"]
+  },
   "include": ["src/**/*.ts"]
 }

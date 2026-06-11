@@ -1,6 +1,7 @@
-import express from 'express'
+import { Router } from 'express';
 
-const router = express.Router();
+const router = Router();
 
+// Agrega tus rutas PATCH aquí
 
-export default router
+export default router;

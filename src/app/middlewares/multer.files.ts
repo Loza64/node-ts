@@ -1,31 +1,37 @@
 import multer, { MulterError } from "multer";
 import type { Request, Response, NextFunction } from "express";
-import { NormalizedRequest } from "../utils/normalize";
+import { multerConfig } from "../config";
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: multerConfig.fileSizeLimitMB * 1024 * 1024 },
+});
 
-export const uploadFile = (req: Request, res: Response, next: NextFunction) => {
+export const uploadFile = (req: Request, res: Response, next: NextFunction): void => {
     const contentType = req.headers["content-type"];
-    if (!contentType || !contentType.includes("multipart/form-data")) {
+
+    if (!contentType?.includes("multipart/form-data")) {
         return next();
     }
 
     upload.any()(req, res, (err: unknown) => {
-        if (err instanceof MulterError) return res.status(400).json({ error: err.message });
-
-        if (err) return res.status(500).json({ error: String(err) });
-
-        const r = req as unknown as NormalizedRequest;
+        if (err instanceof MulterError) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        if (err) {
+            res.status(500).json({ error: String(err) });
+            return;
+        }
 
         if (Array.isArray(req.files)) {
-            r.files = req.files;
+            // ya está bien
         } else if (req.file) {
-            r.files = [req.file];
+            req.files = [req.file];
         } else if (req.files && typeof req.files === "object") {
-            r.files = Object.values(req.files).flat();
+            req.files = Object.values(req.files as Record<string, Express.Multer.File[]>).flat();
         } else {
-            r.files = [];
+            req.files = [];
         }
 
         next();

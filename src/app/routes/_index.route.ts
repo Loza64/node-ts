@@ -1,16 +1,16 @@
-import express from 'express'
-import post from './post.route'
-import get from './get.route'
-import patch from './patch.route'
-import put from './put.route'
-import deleted from './delete.route'
+import { Router } from 'express';
+import get from './get.route';
+import post from './post.route';
+import put from './put.route';
+import patch from './patch.route';
+import del from './delete.route';
 
-const router = express();
+const router = Router();
 
-router.use('/post', post)
-router.use('/get', get)
-router.use('/patch', patch)
-router.use('/put', put)
-router.use('/delete', deleted)
+router.use('/get', get);
+router.use('/post', post);
+router.use('/put', put);
+router.use('/patch', patch);
+router.use('/delete', del);
 
 export default router;
