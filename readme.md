@@ -1,54 +1,92 @@
-# Node-TS: Plantilla Backend con Node.js + TypeScript
+# Node-TS: Backend con Clean Architecture (Hexagonal + Use Cases)
 
-Este  es un proyecto inicializado de nodejs usando typescript, con el fin de
-ya tener la aplicacion inicializado con el motor express junto con sus configuraciones principales
+Backend Node.js + TypeScript + Express organizado con **Clean Architecture / Arquitectura
+Hexagonal (Ports & Adapters)**, el mismo patrón que usan equipos backend senior en
+Mercado Libre, Nubank, Rappi, etc. para desacoplar la lógica de negocio del framework.
+
+## Idea central: 3 capas por módulo
+
+```
+src/modules/<modulo>/
+├── domain/           # Entidades + interfaces (puertos). No importa nada de express/socket.io/db.
+├── application/       # Casos de uso (Use Cases). Orquesta el dominio. No sabe de HTTP.
+└── infrastructure/    # Adaptadores concretos: controllers HTTP, rutas, persistencia, websockets.
+    ├── http/
+    └── persistence/ (o websocket/)
+```
+
+**Regla de dependencia**: `infrastructure` depende de `application`, que depende de `domain`.
+Nunca al revés. El dominio no sabe que existe Express, Socket.io o TypeORM.
+
+## Por qué esto y no carpetas por tipo de archivo
+
+La versión anterior organizaba las rutas por verbo HTTP (`get.route.ts`, `post.route.ts`...),
+lo cual mezcla infraestructura con features y no escala: para entender "todo lo relacionado a
+usuarios" tenías que saltar entre 5 carpetas distintas.
+
+Ahora cada **módulo es autocontenido** (`modules/user`, `modules/file-upload`,
+`modules/notification`) y las rutas HTTP quedan organizadas por **recurso**, como en cualquier
+REST API seria:
+
+```http
+GET    /api/health/hello
+POST   /api/users
+POST   /api/files/upload
+GET    /api/notifications/notify
+```
+
+## Use Cases: el corazón de la arquitectura
+
+Cada acción de negocio es una clase con un solo método público `execute()`, con nombre de
+negocio (`CreateUserUseCase`, `NotifyAllUseCase`). No reciben `req`/`res`, reciben datos ya
+parseados, y no dependen de implementaciones concretas — dependen de **interfaces (puertos)**,
+por ejemplo `UserRepository` o `NotificationPublisher`.
+
+Esto significa que puedes testear TODA la lógica de negocio sin levantar Express ni una base de
+datos real (ver `create-user.use-case.spec.ts`, que solo mockea el puerto del repositorio).
+
+## Ports & Adapters (Inversión de Dependencias)
+
+- **Puerto** = interfaz definida en `domain/` (ej. `UserRepository`, `NotificationPublisher`).
+- **Adaptador** = implementación concreta en `infrastructure/` (ej. `InMemoryUserRepository`,
+  `SocketNotificationPublisher`).
+
+Hoy `UserRepository` está implementado en memoria (`InMemoryUserRepository`) como placeholder.
+El día que conectes una base de datos real, creas `TypeOrmUserRepository implements UserRepository`
+y cambias UNA línea en `composition-root.ts`. Ni el use case ni el controller se enteran.
+
+## Composition Root
+
+`src/composition-root.ts` es el único archivo que conoce simultáneamente las interfaces y sus
+implementaciones concretas: aquí se instancian los repositorios/adaptadores y se inyectan
+"a mano" (constructor injection) en los use cases y controllers — sin un framework de DI, tal
+como lo haría cualquier proyecto Express serio. `src/app.ts` arma el `container` y monta las
+rutas de cada módulo bajo `/api`.
 
 ## Comandos
 
-- **pnpm run dev** : ejecucion de la aplicacion en modo de desarrollo
-- **pnpm run build** : preparar el proyecto para produccion
-- **pnpm start** : ejecucion de la aplicacion en produccion
+- **pnpm run dev** : ejecución en modo desarrollo
+- **pnpm run build** : compilar para producción
+- **pnpm start** : ejecución en producción
 - **pnpm test** : correr los tests con Jest
-- **pnpm run test:watch** : correr los tests en modo watch
-- **pnpm run lint** : correr ESLint sobre `src/`
+- **pnpm run test:watch** : tests en modo watch
+- **pnpm run lint** : ESLint sobre `src/`
 
-## librerias instaladas
+## librerías instaladas
 
-- **express** : Framework web para Node.js que simplifica la creación de APIs REST y servidores HTTP.
-- **multer** : Middleware para manejar multipart/form-data (subida de archivos).
-- **cors**: Permite peticiones cruzadas entre dominios (evita errores CORS).
-- **dotenv**: Carga variables de entorno desde un archivo .env.
-- **helmet**: Protege la app configurando headers HTTP seguros (XSS, CSP, etc.).
-- **debug**:  Librería de logging modular (alternativa a console.log).
-- **morgan**: Middleware de logging de solicitudes HTTP.
-- **cross-env**: Establece variables de entorno compatibles en cualquier OS.
-- **ts-node-dev**: Ejecuta TypeScript en desarrollo con recarga automática.
-- **typescript**: Añade tipado estático a JavaScript. Configuracion -> tsconfig.json
-- **jest**: Framework de pruebas unitarias e integración.
-- **class-validator**: Validar objetos (como los datos de entrada en una API) usando decoradores en clases TypeScript.
-- **class-transformer**: Transformar objetos planos (como JSON) en instancias de clases TypeScript (y viceversa).
+- **express**: framework HTTP
+- **multer**: manejo de `multipart/form-data`
+- **cors** / **helmet** / **morgan**: seguridad y logging HTTP
+- **dotenv**: variables de entorno (`src/shared/config/env.ts`)
+- **debug**: logging modular (`src/shared/logger/logger.ts`)
+- **class-validator** / **class-transformer**: DTOs de entrada (uno por módulo, en `application/`)
+- **socket.io**: tiempo real (módulo `notification`)
+- **jest** + **supertest** + **ts-jest**: tests unitarios y de integración
 
 ### crear un archivo .env
 
-Copia `.env.example` a `.env` y ajusta los valores:
-
 ```bash
 cp .env.example .env
-```
-
-```repositorio
-node-ts/
-├── node_modules/       
-├── src/ 
-├── .env                     
-├── .env.example
-├── .gitignore   
-├── README.md                 
-├── package.json  
-├── pnpm-lock.yaml
-├── tsconfig.json
-├── eslint.config.mjs
-└── jest.config.js
 ```
 
 ```.env
@@ -57,110 +95,54 @@ ORIGIN=http://localhost:12312
 NODE_ENV=development
 ```
 
-### multer
+### Capacidades transversales (ej. WebSockets) compartidas entre módulos
 
-en le archivo config.ts ya se encuentra la constante upload donde ya esta configurada multer lista para exportar
-y usarlo como quiera por ejemplo:
+`src/shared/realtime/` contiene el puerto `NotificationPublisher` y su adaptador
+`SocketNotificationPublisher` (socket.io). Es transversal, no pertenece a un módulo de negocio,
+así que vive en `shared/` — igual que el logger o `AppError`.
 
-```post.route.ts
-// Ruta POST para subir un solo archivo
-router.post('/upload/files', uploadFile, uploadFilesCloud);
-```
+Cualquier módulo puede usar salas de socket.io inyectando ese mismo puerto, sin importar nada
+de otro módulo de negocio. Ejemplo real en `modules/product`:
 
-### middleware
+```ts
+// modules/product/application/notify-product-updated.use-case.ts
+export class NotifyProductUpdatedUseCase {
+  constructor(private readonly publisher: NotificationPublisher) {}
 
-en la carpeta middleware cree un archivo validator.dto.ts la cual se encarga de validar los datos de las clases dto
-solamente hay que importarlo usarlo asi:
-
-```post.route.ts
-router.post('/users', validateDto(CreateUserDto), (req, res) => {
-  res.json({ message: '¡Usuario validado con éxito!', data: req.body });
-});
-```
-
-### configuracion
-
-En el archivo config.ts se encuentra la configuración principal de la aplicación. Desde allí, podrás importar las variables de entorno, como el port (puerto) y el origin (origen), así como los ajustes de debug. Ten en cuenta que el modo debug solo estará activo cuando la aplicación se ejecute en modo de desarrollo (es decir, al compilarla como dev), un ejemplo esta en index.ts.
-
-### api
-
-en tu navegador coloca la siguiente ruta: "<http://localhost:3000/api/get/hello>" lo cual es donde esta el hola mundo del backend, en la carpeta, se encuentran todos los metodos: post, get, put, etc, la ruta general del proyecto es: "<http://localhost:3000/api/>" cuando agreges algo al post, segun lo que pongas en tu ruta siempre comenzara a apartir de "request/ por ejemplo:
-
-```http
-GET    http://localhost:3000/api/get/users
-POST   http://localhost:3000/api/post/login
-PUT    http://localhost:3000/api/put/user/123
-DELETE http://localhost:3000/api/delete/user/123
-```
-
-Eres libre de modificarla a tu antojo, si quieres hacer la ruta mas corta ve a app.ts y ahi encontraras la ruta general la cual es: /api/.
-
-```app.ts
-app.use(express.urlencoded(urlencodeconfig));
-app.use(morgan("dev"))
-app.use('/api', router)
-```
-
-### Mensajes en terminal en modo desarrollo
-
-Puedes importar estas constantes que se encuentran en config.ts para agregar mensajes en la consola y puedes crear mas a tu gusto por ejemplo: const ejemplo = debug("nodets:[ejemplo]");
-
-```config.ts
-export const server = debug("nodets:[server]");
-export const error = debug("nodets:[error]");
-export const database = debug("nodets:[database]");
-export const input = debug("nodets:[input]");
-```
-
-se utiliza de esta forma:
-
-```index.ts
-server("running in port", 3000)
-```
-
-lo cual en la terminal te saldra:
-
-```terminal
-nodets:[server] running in port 3000 +0ms
-```
-
-esto solo funciona cuando el proyecto esta en modo desarrollo.
-
-si quieres cambiar el nodets: por algo mas tienes que modificar el package.json
-
-```package.json
-"dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
-```
-
-remplaza nodets por la palabra que tu quieras pero asegurate que las demas constantes tenga eso mismo de lo contrario
-no te aparecera el mensaje, ejemplo
-
-```package.json
-"dev": "cross-env DEBUG=app:* ts-node-dev src/index.ts",
-```
-
-```config.ts
-export const server = debug("app:[server]");
-export const error = debug("app:[error]");
-export const database = debug("app:[database]");
-export const input = debug("app:[input]");
-```
-
-para las excepciones el response sera:
-```
-{
-  "status": 401,
-  "message": "Error message"
+  execute(productId: string, changes: Record<string, unknown>): void {
+    this.publisher.emitToRoom(`product:${productId}`, JSON.stringify({ productId, changes }));
+  }
 }
 ```
 
+En `composition-root.ts` se crea **una sola instancia** de `SocketNotificationPublisher` y se
+inyecta tanto en `notification` como en `product` (y en cualquier módulo futuro). El cliente se
+suscribe igual que siempre, con el evento `join_room` ya definido en el gateway:
+
+```js
+socket.emit('join_room', 'product:q32312332', (ok) => console.log('joined?', ok));
+socket.on('room_message', (payload) => console.log(payload));
+```
+
+`PATCH /api/products/:id` dispara el use case de ejemplo y emite a la sala `product:<id>`.
+
+### Cómo agregar un módulo nuevo (ej. "product")
+
+1. `domain/product.entity.ts` + `domain/product.repository.ts` (interfaz)
+2. `application/create-product.dto.ts` + `application/create-product.use-case.ts`
+3. `infrastructure/persistence/in-memory-product.repository.ts` (o el adaptador real)
+4. `infrastructure/http/product.controller.ts` + `product.routes.ts`
+5. Registrar en `composition-root.ts` y en `interfaces/http/routes.ts`
+
 ### tests
 
-El proyecto usa Jest + ts-jest. Los archivos `*.spec.ts` viven junto al archivo que prueban
-(por ejemplo `src/app/controller/rest.controller.spec.ts`). Hay dos ejemplos ya incluidos:
+`*.spec.ts` vive junto al archivo que prueba. Hay tres niveles de ejemplo:
 
-- Un test unitario de controller, mockeando `req`/`res` directamente.
-- Un test de integración con `supertest` que levanta la app de Express y golpea las rutas reales.
+- **Unitario de use case** (`create-user.use-case.spec.ts`): mockea el puerto del repositorio,
+  cero HTTP, cero Express.
+- **Unitario de controller** (`user.controller.spec.ts`): mockea el use case, prueba solo la
+  traducción HTTP.
+- **Integración** (`app.spec.ts`): levanta la app real con `supertest` y golpea las rutas.
 
 ```bash
 pnpm test
@@ -168,13 +150,25 @@ pnpm test
 
 ### lint
 
-Se reemplazó `tslint` (deprecado) por ESLint con `typescript-eslint`, usando flat config
-(`eslint.config.mjs`). Corre:
+ESLint + `typescript-eslint`, flat config (`eslint.config.mjs`).
 
 ```bash
 pnpm run lint
 ```
 
+### formato de errores
+
+```json
+{
+  "status": 401,
+  "message": "Error message"
+}
+```
+
+Lanza `AppError` (`src/shared/errors/AppError.ts`) desde cualquier use case y el
+`errorHandler` compartido lo traduce a la respuesta HTTP correcta.
+
 ### Nota
 
-esta aplicacion es de uso libre, solo recuerda borrar la carpeta .git despues de clonar el repositorio para que no tengas problemas a la hora de subir tu backend a github, normalmente la carpeta .git esta oculta
+Esta aplicación es de uso libre. Borra la carpeta `.git` después de clonar el repositorio para
+evitar problemas al subir tu propio backend a GitHub.
