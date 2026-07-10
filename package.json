@@ -2,12 +2,14 @@
   "name": "nodets-backend-app",
   "version": "1.0.0",
   "description": "esta app ya esta con express configurado y lista para añadir las funciones segun necesidades",
-  "main": "src/index.ts",
+  "main": "build/index.js",
   "scripts": {
     "test": "jest",
+    "test:watch": "jest --watch",
     "dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
     "start": "node build/index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "eslint \"src/**/*.ts\""
   },
   "author": "Loza64",
   "license": "ISC",
@@ -20,7 +22,6 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.0",
     "helmet": "^8.1.0",
-    "http": "0.0.1-security",
     "morgan": "^1.10.1",
     "multer": "2.0.2",
     "reflect-metadata": "^0.2.2",
@@ -34,8 +35,13 @@
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
     "@types/socket.io": "^3.0.2",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
     "cross-env": "^10.1.0",
+    "eslint": "^9.15.0",
     "jest": "^30.2.0",
+    "supertest": "^7.0.0",
     "ts-jest": "^29.4.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"

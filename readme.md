@@ -8,6 +8,9 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 - **pnpm run dev** : ejecucion de la aplicacion en modo de desarrollo
 - **pnpm run build** : preparar el proyecto para produccion
 - **pnpm start** : ejecucion de la aplicacion en produccion
+- **pnpm test** : correr los tests con Jest
+- **pnpm run test:watch** : correr los tests en modo watch
+- **pnpm run lint** : correr ESLint sobre `src/`
 
 ## librerias instaladas
 
@@ -27,23 +30,31 @@ ya tener la aplicacion inicializado con el motor express junto con sus configura
 
 ### crear un archivo .env
 
+Copia `.env.example` a `.env` y ajusta los valores:
+
+```bash
+cp .env.example .env
+```
+
 ```repositorio
 node-ts/
 ├── node_modules/       
 ├── src/ 
 ├── .env                     
+├── .env.example
 ├── .gitignore   
 ├── README.md                 
 ├── package.json  
-├── package-lock.json
+├── pnpm-lock.yaml
 ├── tsconfig.json
-├── tslint.json    
-└── requirements.txt         
+├── eslint.config.mjs
+└── jest.config.js
 ```
 
-```.env  
-port=4000  
-origin=http://localhost:12312  (aplicacion del front)
+```.env
+PORT=4000
+ORIGIN=http://localhost:12312
+NODE_ENV=development
 ```
 
 ### multer
@@ -141,6 +152,27 @@ para las excepciones el response sera:
   "status": 401,
   "message": "Error message"
 }
+```
+
+### tests
+
+El proyecto usa Jest + ts-jest. Los archivos `*.spec.ts` viven junto al archivo que prueban
+(por ejemplo `src/app/controller/rest.controller.spec.ts`). Hay dos ejemplos ya incluidos:
+
+- Un test unitario de controller, mockeando `req`/`res` directamente.
+- Un test de integración con `supertest` que levanta la app de Express y golpea las rutas reales.
+
+```bash
+pnpm test
+```
+
+### lint
+
+Se reemplazó `tslint` (deprecado) por ESLint con `typescript-eslint`, usando flat config
+(`eslint.config.mjs`). Corre:
+
+```bash
+pnpm run lint
 ```
 
 ### Nota
