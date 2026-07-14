@@ -6,9 +6,9 @@
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
-    "dev": "cross-env DEBUG=nodets:* ts-node-dev src/index.ts",
+    "dev": "cross-env DEBUG=nodets:* ts-node-dev -r tsconfig-paths/register src/index.ts",
     "start": "node build/index.js",
-    "build": "tsc",
+    "build": "tsc && tsc-alias -p tsconfig.json",
     "lint": "eslint \"src/**/*.ts\""
   },
   "author": "Loza64",
@@ -44,6 +44,8 @@
     "supertest": "^7.0.0",
     "ts-jest": "^29.4.4",
     "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.9.0",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   }
 }
