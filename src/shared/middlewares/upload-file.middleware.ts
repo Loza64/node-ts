@@ -1,6 +1,6 @@
 import multer, { MulterError } from 'multer';
 import type { Request, Response, NextFunction } from 'express';
-import { multerConfig } from '../config/express.config';
+import { multerConfig } from 'src/shared/config/express.config';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -24,12 +24,15 @@ export const uploadFile = (req: Request, res: Response, next: NextFunction): voi
       return;
     }
 
-    if (Array.isArray(req.files)) {
-      // ya está bien
-    } else if (req.file) {
-      req.files = [req.file];
-    } else if (req.files && typeof req.files === 'object') {
-      req.files = Object.values(req.files as Record<string, Express.Multer.File[]>).flat();
+    const files = req.files;
+    const singleFile = req.file;
+
+    if (Array.isArray(files)) {
+      req.files = files;
+    } else if (singleFile) {
+      req.files = [singleFile];
+    } else if (files && typeof files === 'object') {
+      req.files = Object.values(files as Record<string, Express.Multer.File[]>).flat();
     } else {
       req.files = [];
     }
