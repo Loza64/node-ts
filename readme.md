@@ -264,19 +264,19 @@ Sigue el mismo patrón de puertos y adaptadores que el resto de la app:
   Express (`corsConfig`), y queda montado sobre el servidor HTTP nativo.
 - `getSocketIO()` expone la instancia ya inicializada (lanza error si se llama antes de
   `initSocket`).
-- Maneja los eventos de sala: `join_room`, `leave_room`, `room_message`, y loguea conexión /
+- Maneja los eventos de sala: `join`, `leave`, `event`, y loguea conexión /
   desconexión / errores con `socketLog`.
 
 ### Eventos tipados (`socket.types.ts`)
 
 | Dirección          | Evento          | Payload                                              |
 |---------------------|-----------------|-------------------------------------------------------|
-| Cliente → Servidor   | `join_room`      | `room: string, callback?: (ok: boolean) => void`      |
-| Cliente → Servidor   | `leave_room`     | `room: string, callback?: (ok: boolean) => void`      |
-| Cliente → Servidor   | `room_message`   | `{ room, message }`                                   |
+| Cliente → Servidor   | `join`      | `room: string, callback?: (ok: boolean) => void`      |
+| Cliente → Servidor   | `leave`     | `room: string, callback?: (ok: boolean) => void`      |
+| Cliente → Servidor   | `event`   | `{ room, message }`                                   |
 | Servidor → Cliente   | `user_joined`    | `{ socketId, room }`                                  |
 | Servidor → Cliente   | `user_left`      | `{ socketId, room }`                                  |
-| Servidor → Cliente   | `room_message`   | `{ from, room, message }`                             |
+| Servidor → Cliente   | `event`   | `{ from, room, message }`                             |
 | Servidor → Cliente   | `notification`   | `{ message }`                                          |
 
 ### Ejemplo cliente
@@ -286,11 +286,11 @@ import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:4000');
 
-socket.emit('join_room', 'product:123', (ok) => console.log('joined?', ok));
-socket.on('room_message', (payload) => console.log(payload));
+socket.emit('join', 'product:123', (ok) => console.log('joined?', ok));
+socket.on('event', (payload) => console.log(payload));
 socket.on('notification', (payload) => console.log(payload.message));
-socket.emit('room_message', { room: 'product:123', message: 'hola' });
-socket.emit('leave_room', 'product:123');
+socket.emit('event', { room: 'product:123', message: 'hola' });
+socket.emit('leave', 'product:123');
 ```
 
 ### Cómo emitir desde un use case nuevo

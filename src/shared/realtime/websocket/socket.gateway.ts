@@ -2,12 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { corsConfig } from '../../config/express.config';
 import { socketLog } from '../../logger/logger';
-import {
-  ClientToServerEvents,
-  InterServerEvents,
-  ServerToClientEvents,
-  SocketData,
-} from './socket.types';
+import { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData } from './socket.types';
 
 export type AppServer = Server<
   ClientToServerEvents,
@@ -27,22 +22,22 @@ export const initSocket = (httpServer: HttpServer): AppServer => {
   io.on('connection', (socket: AppSocket) => {
     socketLog(`Connected: ${socket.id}`);
 
-    socket.on('join_room', (room, callback) => {
+    socket.on('join', (room, callback) => {
       socket.join(room);
       socketLog(`${socket.id} joined: ${room}`);
       socket.to(room).emit('user_joined', { socketId: socket.id, room });
       callback?.(true);
     });
 
-    socket.on('leave_room', (room, callback) => {
+    socket.on('leave', (room, callback) => {
       socket.leave(room);
       socketLog(`${socket.id} left: ${room}`);
       socket.to(room).emit('user_left', { socketId: socket.id, room });
       callback?.(true);
     });
 
-    socket.on('room_message', ({ room, message }) => {
-      socket.to(room).emit('room_message', { from: socket.id, room, message });
+    socket.on('event', ({ room, message }) => {
+      socket.to(room).emit('event', { from: socket.id, room, message });
     });
 
     socket.on('disconnect', (reason) => {

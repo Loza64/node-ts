@@ -7,6 +7,6 @@ export class SocketNotificationPublisher implements NotificationPublisher {
   }
 
   emitToRoom(room: string, message: string): void {
-    getSocketIO().to(room).emit('room_message', { from: 'server', room, message });
+    getSocketIO().to(room).emit('event', { from: 'server', room, message });
   }
 }
