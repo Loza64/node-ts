@@ -15,9 +15,7 @@ type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerE
 let io: AppServer;
 
 export const initSocket = (httpServer: HttpServer): AppServer => {
-  io = new Server(httpServer, {
-    cors: corsConfig,
-  });
+  io = new Server(httpServer, { cors: corsConfig });
 
   io.on('connection', (socket: AppSocket) => {
     socketLog(`Connected: ${socket.id}`);
@@ -25,19 +23,23 @@ export const initSocket = (httpServer: HttpServer): AppServer => {
     socket.on('join', (room, callback) => {
       socket.join(room);
       socketLog(`${socket.id} joined: ${room}`);
-      socket.to(room).emit('user_joined', { socketId: socket.id, room });
       callback?.(true);
     });
 
     socket.on('leave', (room, callback) => {
       socket.leave(room);
       socketLog(`${socket.id} left: ${room}`);
-      socket.to(room).emit('user_left', { socketId: socket.id, room });
       callback?.(true);
     });
 
     socket.on('event', ({ room, message }) => {
+      socketLog(`${socket.id} event: ${room}`);
       socket.to(room).emit('event', { from: socket.id, room, message });
+    });
+
+    socket.on('message', ({ room, payload }) => {
+      socketLog(`${socket.id} message: ${room}`);
+      socket.to(room).emit('message', { from: socket.id, room, payload });
     });
 
     socket.on('disconnect', (reason) => {
