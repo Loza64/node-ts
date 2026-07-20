@@ -5,5 +5,5 @@
  */
 export interface NotificationPublisher {
   broadcast(message: string): void;
-  emitToRoom(room: string, message: string): void;
+  emitToRoom(room: string, message: unknown): void;
 }
