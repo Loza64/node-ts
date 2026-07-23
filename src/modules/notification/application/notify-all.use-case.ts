@@ -1,9 +1,6 @@
-import { NotificationPublisher } from '../../../shared/realtime/notification-publisher.port';
+import { SocketPublisher } from '../../../shared/realtime/socket-publisher.port';
 
 export class NotifyAllUseCase {
-  constructor(private readonly publisher: NotificationPublisher) { }
-
-  execute(message: string): void {
-    this.publisher.broadcast(message);
-  }
+  constructor(private readonly publisher: SocketPublisher) { }
+  execute(message: string): void { this.publisher.broadcast({ message }) }
 }

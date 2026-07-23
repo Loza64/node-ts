@@ -1,18 +1,19 @@
+// socket.types.ts
+export interface RoomEventPayload<T = unknown> { room: string, payload: T }
+
 export interface ServerToClientEvents {
-  event: (payload: { from: string; room: string; message: unknown }) => void;
-  message: (payload: { from: string; room: string; payload: unknown }) => void;
-  notification: (payload: { message: string }) => void;
+  event: (payload: unknown) => void;
+  message: (payload: unknown) => void;
+  notification: (payload: unknown) => void;
 }
 
 export interface ClientToServerEvents {
   join: (room: string, callback?: (ok: boolean) => void) => void;
   leave: (room: string, callback?: (ok: boolean) => void) => void;
-  event: (payload: { room: string; message: unknown }) => void;
-  message: (payload: { room: string; payload: unknown }) => void;
+  event: (data: RoomEventPayload) => void;
+  message: (data: RoomEventPayload) => void;
 }
 
 export type InterServerEvents = object;
 
-export interface SocketData {
-  userId?: string;
-}
+export interface SocketData { userId?: string }

@@ -32,14 +32,14 @@ export const initSocket = (httpServer: HttpServer): AppServer => {
       callback?.(true);
     });
 
-    socket.on('event', ({ room, message }) => {
+    socket.on('event', ({ room, payload }) => {
       socketLog(`${socket.id} event: ${room}`);
-      socket.to(room).emit('event', { from: socket.id, room, message });
+      socket.to(room).emit('event', payload);
     });
 
     socket.on('message', ({ room, payload }) => {
       socketLog(`${socket.id} message: ${room}`);
-      socket.to(room).emit('message', { from: socket.id, room, payload });
+      socket.to(room).emit('message', payload);
     });
 
     socket.on('disconnect', (reason) => {

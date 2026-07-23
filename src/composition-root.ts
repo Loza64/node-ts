@@ -5,7 +5,7 @@ import { UserController } from './modules/user/infrastructure/http/user.controll
 import { UploadFilesUseCase } from './modules/file-upload/application/upload-files.use-case';
 import { FileController } from './modules/file-upload/infrastructure/http/file.controller';
 
-import { SocketNotificationPublisher } from './shared/realtime/websocket/socket-notification.publisher';
+import { SocketPublisherNotification } from './shared/realtime/websocket/socket-publisher.notification';
 import { NotifyAllUseCase } from './modules/notification/application/notify-all.use-case';
 import { NotificationController } from './modules/notification/infrastructure/http/notification.controller';
 
@@ -23,7 +23,7 @@ export const buildContainer = () => {
   const fileController = new FileController(uploadFilesUseCase);
 
   // --- Puerto de tiempo real (shared), una sola instancia compartida ---
-  const notificationPublisher = new SocketNotificationPublisher();
+  const notificationPublisher = new SocketPublisherNotification();
 
   // --- Modulo notification ---
   const notifyAllUseCase = new NotifyAllUseCase(notificationPublisher);
