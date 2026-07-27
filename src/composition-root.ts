@@ -23,13 +23,13 @@ export const buildContainer = () => {
   const fileController = new FileController(uploadFilesUseCase);
 
   // --- Puerto de tiempo real (shared), una sola instancia compartida ---
-  const notificationPublisher = new SocketPublisherNotification();
+  const socketPublisher = new SocketPublisherNotification();
 
   // --- Modulo notification ---
-  const notifyAllUseCase = new NotifyAllUseCase(notificationPublisher);
+  const notifyAllUseCase = new NotifyAllUseCase(socketPublisher);
   const notificationController = new NotificationController(notifyAllUseCase);
 
-  const notifyProductUpdatedUseCase = new NotifyProductUpdatedUseCase(notificationPublisher);
+  const notifyProductUpdatedUseCase = new NotifyProductUpdatedUseCase(socketPublisher);
   const productController = new ProductController(notifyProductUpdatedUseCase);
 
   return { userController, fileController, notificationController, productController };
