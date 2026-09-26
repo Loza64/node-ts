@@ -37,15 +37,15 @@ export class CloudinaryFileStorage implements FileStorage {
   }
 
   async upload(file: Express.Multer.File, folder: string): Promise<CloudinaryUploadResult> {
-    return this.fire(this.uploadBreaker, file, folder);
+    return this.fire(() => this.uploadBreaker.fire(file, folder), this.uploadBreaker.name);
   }
 
   async destroy(publicId: string, resourceType = 'image'): Promise<void> {
-    await this.fire(this.destroyBreaker, publicId, resourceType);
+    await this.fire(() => this.destroyBreaker.fire(publicId, resourceType), this.destroyBreaker.name);
   }
 
   async setTags(publicId: string, tags: string[], resourceType = 'image'): Promise<void> {
-    await this.fire(this.setTagsBreaker, publicId, tags, resourceType);
+    await this.fire(() => this.setTagsBreaker.fire(publicId, tags, resourceType), this.setTagsBreaker.name);
   }
 
   private performUpload(file: Express.Multer.File, folder: string): Promise<CloudinaryUploadResult> {
@@ -100,15 +100,12 @@ export class CloudinaryFileStorage implements FileStorage {
     }
   }
 
-  private async fire<TArgs extends unknown[], TResult>(
-    breaker: CircuitBreaker<TArgs, TResult>,
-    ...args: TArgs
-  ): Promise<TResult> {
+  private async fire<TResult>(action: () => Promise<TResult>, breakerName: string): Promise<TResult> {
     try {
-      return await breaker.fire(...args);
+      return await action();
     } catch (err) {
       if (isCircuitBreakerFailure(err)) {
-        errorLog('[%s] short-circuited: %s', breaker.name, (err as Error).message);
+        errorLog('[%s] short-circuited: %s', breakerName, (err as Error).message);
         throw new AppError(SERVICE_UNAVAILABLE_MESSAGE, 503);
       }
       throw err;
