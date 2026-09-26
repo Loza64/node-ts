@@ -22,7 +22,7 @@ de almacenamiento de archivos (Cloudinary) ya listo para conectar cuando lo nece
 | Subida de archivos     | Multer (memoria)                               |
 | Almacenamiento externo | Cloudinary (adaptador listo, aún no conectado) |
 | Resiliencia            | opossum (circuit breaker)                      |
-| Tareas programadas     | node-cron                                      |
+| Tareas programadas     | node-cron (detrás de un puerto `Scheduler`)    |
 | Documentación API      | swagger-jsdoc + swagger-ui-express + class-validator-jsonschema |
 | Hashing                | bcryptjs                                       |
 | Testing                | Jest + ts-jest + Supertest                     |
@@ -53,6 +53,11 @@ negocio propia que proteger — son ilustrativos de un patrón (subida de archiv
 no de una entidad completa. `user` es el único módulo con las 3 capas completas y es la
 referencia a seguir cuando agregues un módulo con persistencia real.
 
+> ⚠️ `modules/product/` trae carpetas vacías `domain/` e `infrastructure/persistence/` — quedaron
+> scaffoldeadas para cuando `product` pase a ser un módulo con persistencia real (ver §17,
+> "Nota sobre el módulo product"), pero hoy el único código vivo ahí es
+> `notify-product-updated.use-case.ts` y su controller/routes.
+
 ### Use Cases
 
 Cada acción de negocio es una clase con un único método público `execute()`, con nombre de
@@ -63,9 +68,10 @@ permite testear toda la lógica de negocio sin levantar Express ni una base de d
 ### Ports & Adapters
 
 - **Puerto** = interfaz definida en `domain/` o `shared/` (ej. `UserRepository`,
-  `SocketPublisher`, `FileStorage`).
+  `SocketPublisher`, `FileStorage`, `Scheduler`).
 - **Adaptador** = implementación concreta en `infrastructure/` o `shared/` (ej.
-  `InMemoryUserRepository`, `SocketPublisherNotification`, `CloudinaryFileStorage`).
+  `InMemoryUserRepository`, `SocketPublisherNotification`, `CloudinaryFileStorage`,
+  `NodeCronScheduler`).
 
 Hoy `UserRepository` está implementado en memoria (`InMemoryUserRepository`) como placeholder.
 El día que conectes una base de datos real, creás `TypeOrmUserRepository implements
@@ -76,7 +82,10 @@ UserRepository` (o Mongoose, Prisma, etc.) y cambiás **una sola línea** en
 
 `src/composition-root.ts` es el único archivo que conoce simultáneamente las interfaces y sus
 implementaciones concretas: aquí se instancian los repositorios/adaptadores y se inyectan "a
-mano" (constructor injection) en los use cases y controllers, sin framework de DI.
+mano" (constructor injection) en los use cases y controllers, sin framework de DI. Hoy arma los
+módulos `user`, `file-upload`, `notification` y `product`, y comparte una única instancia de
+`SocketPublisherNotification` entre `notification` y `product`. **No** instancia todavía ningún
+`Scheduler` (ver §10).
 
 `src/app.ts` arma el `container` (llamando a `buildContainer()`), monta las rutas de cada
 módulo bajo `/api` y expone la documentación interactiva en `/api-docs`.
@@ -88,7 +97,7 @@ módulo bajo `/api` y expone la documentación interactiva en `/api-docs`.
 ```
 src/
 ├── @types/
-│   └── express/index.d.ts          # Extiende Request con `files?`
+│   └── express/index.d.ts          # Extiende Request con `files?` y `validatedQuery?`
 ├── app.ts                          # Crea y configura la app Express (createApp)
 ├── app.spec.ts                     # Test de integración con supertest
 ├── composition-root.ts             # DI manual: instancia repos/use cases/controllers
@@ -117,6 +126,8 @@ src/
 │   │   ├── application/notify-all.use-case.ts
 │   │   └── infrastructure/http/notification.controller.ts / notification.routes.ts
 │   └── product/
+│       ├── domain/                       # vacía (scaffold, ver §17)
+│       ├── infrastructure/persistence/   # vacía (scaffold, ver §17)
 │       ├── application/notify-product-updated.use-case.ts
 │       └── infrastructure/http/product.controller.ts / product.routes.ts
 └── shared/
@@ -132,14 +143,17 @@ src/
     ├── dto/
     │   └── id-ref.dto.ts            # DTO genérico { id: number } de referencia para swagger
     ├── errors/AppError.ts          # Error operacional con statusCode
-    ├── logger/logger.ts            # Namespaces de `debug`
+    ├── logger/logger.ts            # Namespaces de `debug` (server, socket, swagger, error, database, input, circuit-breaker)
     ├── middlewares/
     │   ├── error-handler.middleware.ts
     │   ├── upload-file.middleware.ts
-    │   ├── validate-dto.middleware.ts
+    │   ├── validate-dto.middleware.ts       # Valida req.body contra un DTO
+    │   ├── validate-query.middleware.ts     # Valida req.query contra un DTO (ver §6)
+    │   ├── validate-id-param.middleware.ts  # Valida un :id de ruta como entero positivo (ver §6)
     │   └── validation-errors.util.ts
     ├── pagination/
-    │   └── pagination-query.dto.ts  # DTOs de query params (paginación/búsqueda/soft-delete), ver §7
+    │   ├── pagination-query.dto.ts  # DTOs de query params (paginación/búsqueda/soft-delete), ver §7
+    │   └── pagination.types.ts      # Contratos genéricos Page<T>/PageMeta/ListParams, ver §7
     ├── realtime/
     │   ├── socket-publisher.port.ts             # Puerto
     │   └── websocket/
@@ -151,8 +165,10 @@ src/
     │   ├── circuit-breaker.factory.spec.ts
     │   ├── circuit-breaker.registry.ts
     │   └── circuit-breaker.errors.ts
-    ├── scheduler/
-    │   └── cron.factory.ts         # Factory genérico para registrar cron jobs, ver §10
+    ├── scheduler/                  # Puerto + adaptador de tareas programadas, ver §10
+    │   ├── scheduler.port.ts        # Puertos: CronJob, Scheduler
+    │   ├── node-cron.scheduler.ts   # Adaptador: NodeCronScheduler (envuelve node-cron)
+    │   └── node-cron.scheduler.spec.ts
     ├── swagger/
     │   └── schemas.ts               # Convierte los DTOs (decorators de class-validator) en JSON Schema
     └── utils/bcrypt.util.ts        # hash / compare de contraseñas
@@ -174,6 +190,9 @@ src/
    - Monta el router de la API bajo `/api`.
    - Monta Swagger UI en `/api-docs` (ver §11).
    - `errorHandler` al final, como manejador de errores centralizado.
+
+> `index.ts` todavía no toca `NodeCronScheduler`: no hay ningún job programado corriendo hoy
+> (ver §10).
 
 ---
 
@@ -251,11 +270,14 @@ Ambos son ejemplos de "fire and forget" hacia Socket.IO, no tienen reglas de val
   lo devuelve en la respuesta y lo reenvía por el evento `event` únicamente a los sockets que
   se hayan unido a la sala `product:<id>` (`emitToRoom`). Es un ejemplo de "notificar un cambio
   a quien esté mirando ese recurso en particular" — al construir un módulo real con persistencia,
-  aquí deberías agregar su propio DTO de validación antes de llamar al use case.
+  aquí deberías agregar su propio DTO de validación antes de llamar al use case (además de
+  `validateIdParam` en el `:id`, ver §6).
 
 ---
 
-## 6. Validación de DTOs
+## 6. Validación de DTOs y de parámetros
+
+### `validateDTO` — valida `req.body`
 
 `shared/middlewares/validate-dto.middleware.ts` expone `validateDTO(DtoClass)`:
 
@@ -271,34 +293,78 @@ Se usa como middleware de ruta:
 router.post('/', validateDTO(CreateUserDto), controller.create);
 ```
 
-### DTOs de referencia en `shared/` (aún no wireados a una ruta)
+### `validateQuery` — valida `req.query`
 
-Estos DTOs existen como **contrato listo para usar** el día que agregues un endpoint de
-listado o de referencia por id — no dependen de ningún ORM en particular, así que sirven sin
-importar qué elijas conectar después:
+`shared/middlewares/validate-query.middleware.ts` expone `validateQuery(DtoClass)`, el mismo
+patrón que `validateDTO` pero sobre `req.query`: convierte, valida (`whitelist`,
+`forbidNonWhitelisted`) y, si pasa, guarda el DTO tipado en `req.validatedQuery` (no reemplaza
+`req.query`, que Express no permite reescribir; ver `@types/express/index.d.ts`).
+
+```ts
+router.get('/', validateQuery(SoftDeleteQueryDto), controller.findAll);
+// GET /api/products?page=2&pageSize=20&search=camisa&deleted=true
+// El controller lee `req.validatedQuery as SoftDeleteQueryDto`
+```
+
+### `validateIdParam` — valida un `:id` de ruta
+
+`shared/middlewares/validate-id-param.middleware.ts` es un validador de parámetro de Express
+(no un middleware de ruta normal): comprueba que el valor sea un entero positivo sin ceros a la
+izquierda y que no exceda `2_147_483_647` (límite típico de un `int` de Postgres/MySQL). Si no
+cumple, responde `400` sin llegar al controller.
+
+```ts
+import { validateIdParam } from '../../../../shared/middlewares/validate-id-param.middleware';
+
+router.param('id', validateIdParam); // se registra una vez por router
+router.get('/:id', controller.findOne);
+router.patch('/:id', controller.update);
+```
+
+Ninguna ruta existente lo usa todavía (`PATCH /api/products/:id` sigue sin validar su `:id` ni
+su body, ver §5) — está listo para engancharse en el primer módulo con persistencia real que
+reciba un `:id` numérico.
+
+### DTOs y contratos de referencia en `shared/` (aún no wireados a una ruta)
+
+Estos existen como **contrato listo para usar** el día que agregues un endpoint de listado o de
+referencia por id — no dependen de ningún ORM en particular, así que sirven sin importar qué
+elijas conectar después:
 
 - **`IdRefDto`** (`shared/dto/id-ref.dto.ts`): `{ id: number }`, valida un id entero positivo.
   Útil para el body de un DTO anidado que solo referencia otra entidad por su id (ej.
   `category: IdRefDto` dentro de un `CreateProductDto`).
 - **`PaginationQueryDto` / `SearchQueryDto` / `SoftDeleteQueryDto`**
-  (`shared/pagination/pagination-query.dto.ts`): query params reutilizables para cualquier
-  listado (ver ejemplo abajo).
+  (`shared/pagination/pagination-query.dto.ts`): DTOs de query params para `validateQuery` (ver
+  arriba). `SoftDeleteQueryDto` extiende `SearchQueryDto`, que extiende `PaginationQueryDto` —
+  así que trae `page` (default 1), `pageSize` (default 10, máx 100), `search` (opcional,
+  recortado y máx 100 chars) y `deleted` (boolean, default `false`: `true` → solo eliminados,
+  `false`/ausente → solo activos).
+- **`Page<T>` / `PageMeta` / `ListParams` / `SoftDeleteListParams`**
+  (`shared/pagination/pagination.types.ts`): contratos de **salida** (no DTOs validables) para
+  que cualquier use case de listado devuelva siempre la misma forma —
+  `{ items: T[], meta: { page, pageSize, pageCount, total } }` — y reciba sus parámetros ya
+  tipados (`ListParams`/`SoftDeleteListParams`) en vez de un objeto suelto.
 
 ```ts
 // Ejemplo de uso al construir un endpoint de listado nuevo:
 import { Router } from 'express';
+import { validateQuery } from '../../../../shared/middlewares/validate-query.middleware';
 import { SoftDeleteQueryDto } from '../../../../shared/pagination/pagination-query.dto';
 
 router.get('/', validateQuery(SoftDeleteQueryDto), controller.findAll);
-// GET /api/products?page=2&pageSize=20&search=camisa&delete=true
 ```
 
-`SoftDeleteQueryDto` extiende `SearchQueryDto`, que extiende `PaginationQueryDto` — así que
-trae `page` (default 1), `pageSize` (default 10, máx 100), `search` (opcional, recortado y
-máx 100 chars) y `delete` (boolean, default `false`: `true` → solo eliminados,
-`false`/ausente → solo activos). No existe hoy un middleware `validateQuery` en la plantilla
-—si lo necesitás, seguí el mismo patrón que `validate-dto.middleware.ts` pero
-sobre `req.query` en vez de `req.body`.
+```ts
+// En el use case de listado, usando los tipos de pagination.types.ts:
+import { Page, SoftDeleteListParams } from '../../../shared/pagination/pagination.types';
+
+export class ListProductsUseCase {
+  async execute(params: SoftDeleteListParams): Promise<Page<Product>> {
+    // ...
+  }
+}
+```
 
 ---
 
@@ -404,7 +470,7 @@ la API real de Cloudinary, con un circuit breaker independiente por operación (
 > ⚠️ **Este adaptador existe pero todavía no está conectado a ningún módulo.**
 > `UploadFilesUseCase` (file-upload) hoy solo lee la metadata del archivo en memoria y la
 > devuelve — no llama a `CloudinaryFileStorage`. Conectarlo es uno de los "siguientes pasos"
-> típicos (§13): inyectás `CloudinaryFileStorage` en el use case y reemplazás el resumen plano
+> típicos (§16): inyectás `CloudinaryFileStorage` en el use case y reemplazás el resumen plano
 > por el resultado real de `storage.upload(file, env.CLOUDINARY_FOLDER)`.
 
 ### Regla de negocio
@@ -428,43 +494,68 @@ const uploadFilesUseCase = new UploadFilesUseCase(fileStorage, env.CLOUDINARY_FO
 
 ---
 
-## 10. Tareas programadas: node-cron (`shared/scheduler/cron.factory.ts`)
+## 10. Tareas programadas: `shared/scheduler/`
 
-Factory genérico para registrar cron jobs, agnóstico de qué haga la tarea por dentro (no sabe
-ni le importa si la tarea toca una base de datos, un archivo, o solo hace un `fetch`).
+Igual que el resto del template, las tareas programadas están detrás de **puertos y
+adaptadores**, no de una sola función de fábrica:
+
+- **Puertos** (`scheduler.port.ts`):
+  - `CronJob`: `{ name, cronExpression, preventOverlap?, run(): Promise<void> }` — describe
+    **qué** tarea correr y con qué frecuencia, sin saber nada de `node-cron`.
+  - `Scheduler`: `register(job)`, `start()`, `stop()` — el contrato para registrar jobs y
+    activarlos/detenerlos todos juntos.
+- **Adaptador**: `NodeCronScheduler` (`node-cron.scheduler.ts`) implementa `Scheduler` usando
+  [node-cron](https://www.npmjs.com/package/node-cron) por debajo. El día que quisieras otro
+  motor de cron, creás otro adaptador que implemente `Scheduler` y no tocás nada que dependa
+  del puerto.
 
 ### Regla de negocio
 
-- **Protección contra solapamiento**: si una corrida todavía está en curso cuando el cron
-  vuelve a disparar, el nuevo tick se **omite** (no se ejecutan dos corridas del mismo job en
-  paralelo).
-- **Falla rápido**: si la expresión cron no es válida (`cron.validate`), lanza un error al
-  registrar el job — mejor descubrirlo al arrancar el server que en producción, cuando el job
+- **`register()` no arranca el job**: valida la expresión cron (`cron.validate`) y crea la
+  tarea con `scheduled: false`. Los jobs solo corren después de llamar a `start()` — eso
+  permite registrar todos los jobs de la app y arrancarlos juntos en un solo punto.
+- **Protección contra solapamiento**: por defecto (`preventOverlap` ausente o `true`), si una
+  corrida todavía está en curso cuando el cron vuelve a disparar, el nuevo tick se **omite** (no
+  se ejecutan dos corridas del mismo job en paralelo). Un job puede optar por
+  `preventOverlap: false` si quiere permitir corridas solapadas.
+- **Falla rápido al registrar**: si la expresión cron no es válida, `register()` lanza un error
+  inmediatamente — mejor descubrirlo al arrancar el server que en producción, cuando el job
   simplemente nunca corra.
-- Cualquier error no controlado dentro de la tarea se loguea (`errorLog`) pero **no tumba el
+- Cualquier error no controlado dentro de `run()` se loguea (`errorLog`) pero **no tumba el
   proceso** — el próximo tick se intenta igual.
+- `start()` y `stop()` activan/detienen **todos** los jobs registrados hasta ese momento (útil
+  para el shutdown de la app).
 
 ### Cómo usarlo
 
 ```ts
-import { createCronJob } from './shared/scheduler/cron.factory';
+// Ejemplo: registrar un job de limpieza de fotos huérfanas en Cloudinary.
+// cronExpression y cualquier parámetro del job (antigüedad mínima, etc.) son
+// valores que definirías vos — hoy no hay ninguna env var reservada para esto.
+import { NodeCronScheduler } from './shared/scheduler/node-cron.scheduler';
+import { CronJob } from './shared/scheduler/scheduler.port';
 
-// dentro de index.ts, después de armar el container:
-const job = createCronJob({
+const orphanPhotosCleanupJob: CronJob = {
   name: 'orphan-photos-cleanup',
   cronExpression: '0 * * * *', // cada hora, en punto
-  task: async () => {
+  run: async () => {
     await miUseCaseDeLimpieza.execute();
   },
-});
+};
+
+const scheduler = new NodeCronScheduler();
+scheduler.register(orphanPhotosCleanupJob);
+scheduler.start();
 
 // en el shutdown (SIGINT/SIGTERM):
-job.stop();
+scheduler.stop();
 ```
 
-Hoy **no hay ningún job registrado** en `index.ts` — el factory queda listo para el primer job
-real que necesites (limpieza de datos huérfanos, sincronizaciones periódicas, envío de reportes,
-etc.), sin acoplarlo a ningún ORM.
+> ⚠️ **Hoy no hay ningún `Scheduler` instanciado ni ningún job registrado** en
+> `composition-root.ts` ni en `index.ts` — el puerto y el adaptador existen y están cubiertos
+> por tests (`node-cron.scheduler.spec.ts`), pero nada los invoca todavía. Registrar el primer
+> job real (por ejemplo, la limpieza de fotos huérfanas del ejemplo de arriba) es uno de los
+> "siguientes pasos" típicos (§16).
 
 ---
 
@@ -473,14 +564,23 @@ etc.), sin acoplarlo a ningún ORM.
 Tres piezas trabajando juntas:
 
 1. **`shared/swagger/schemas.ts`**: usa `class-validator-jsonschema` para convertir los
-   *decorators* de `class-validator` de cualquier DTO importado (`IdRefDto`,
-   `PaginationQueryDto`/`SearchQueryDto`/`SoftDeleteQueryDto`, `CreateUserDto`, ...) en JSON
-   Schema real, sin escribirlo a mano. **Para que un DTO nuevo aparezca en `/api-docs`, hay
-   que importarlo (aunque sea solo por su efecto secundario) en este archivo.**
+   *decorators* de `class-validator` de cualquier DTO importado en JSON Schema real, sin
+   escribirlo a mano. **Para que un DTO nuevo aparezca en `/api-docs`, hay que importarlo
+   (aunque sea solo por su efecto secundario) en este archivo.**
 2. **`src/swagger.ts`**: arma el spec OpenAPI completo con `swagger-jsdoc`, tomando los
    schemas del punto anterior más los bloques de comentario `@swagger` que escribas en los
    archivos `*.routes.ts` (ver ejemplo en `health.routes.ts`).
 3. **`app.ts`**: monta `swagger-ui-express` en `/api-docs` con ese spec.
+
+> ⚠️ **Importante — imports rotos en `schemas.ts`.** Hoy `schemas.ts` importa, además de
+> `IdRefDto` y los DTOs de `pagination-query.dto.ts`, DTOs de un módulo `category` y de DTOs
+> `create-product.dto` / `update-product.dto` / `product-query.dto` dentro de `modules/product/`.
+> Ninguno de esos archivos existe en el árbol actual de `src/` (`modules/product/` solo tiene
+> `notify-product-updated.use-case.ts` y su controller/routes; no hay ningún `modules/category/`)
+> — esos imports van a romper la resolución de módulos al arrancar el server o al correr
+> `schemas.ts`. Antes de dar por buena esta sección, hay que **crear los DTOs de `category` y
+> `product` que faltan siguiendo el patrón de `CreateUserDto`** (ver §6 y §15) **o quitar esos
+> imports de `schemas.ts`** hasta que ese módulo exista de verdad.
 
 ### Cómo documentar un endpoint nuevo
 
@@ -595,6 +695,21 @@ env.CB_RESET_TIMEOUT_MS           // number, default 15000  — cuánto espera a
 env.CB_VOLUME_THRESHOLD           // number, default 5      — mínimo de llamadas antes de evaluar el %
 ```
 
+> Cuando conectes una base de datos real o el primer cron job (§10, §16), agregá tus propias
+> variables siguiendo el mismo patrón: tipadas y con default en `env.ts`. Por ejemplo, para una
+> base de datos y para el job de limpieza de fotos huérfanas mencionado en §10:
+> ```ts
+> env.DB_HOST      // string, default 'localhost'
+> env.DB_PORT      // number, default 5432
+> env.DB_USER      // string, default 'postgres'
+> env.DB_PASSWORD  // string, default 'postgres'
+> env.DB_NAME      // string, default 'app_db'
+>
+> env.ORPHAN_PHOTOS_CRON             // string, default '0 * * * *'
+> env.ORPHAN_PHOTOS_MIN_AGE_MINUTES  // number, default 1440 (24h)
+> ```
+> Ninguna de estas existe hoy en `env.ts` — son solo un ejemplo del patrón a seguir.
+
 Ejemplo de `.env`:
 ```dotenv
 PORT=4000
@@ -638,6 +753,7 @@ A eso se suman los tests de infraestructura compartida:
 |---------------------------------------|------------------------------------------------------------------------|
 | `circuit-breaker.factory.spec.ts`     | Que el breaker abre tras suficientes fallas y que `errorFilter` evita abrir el circuito por errores de cliente. |
 | `cloudinary.adapter.spec.ts`          | Que un error real se deja pasar mientras el circuito está cerrado, y que tras varias fallas 5xx el circuito abre y falla rápido con `503 AppError` sin llamar de nuevo a Cloudinary. |
+| `node-cron.scheduler.spec.ts`         | Que `register()` rechaza expresiones cron inválidas sin llamar a `node-cron`, que un job no arranca hasta `start()`, que `stop()` detiene todos los jobs, que el overlap guard omite un tick si el anterior sigue en curso (salvo `preventOverlap: false`), y que una falla dentro de `run()` se loguea sin tumbar el tick. |
 
 ---
 
@@ -647,39 +763,62 @@ Seguí `user/` como plantilla si el módulo necesita persistencia real:
 
 1. `domain/<modulo>.entity.ts` + `domain/<modulo>.repository.ts` (interfaz/puerto).
 2. `application/create-<modulo>.dto.ts` + `application/create-<modulo>.use-case.ts`. Si vas a
-   listar con paginación/búsqueda, reusá `SoftDeleteQueryDto` de `shared/pagination/` (§6) en
-   vez de crear tus propios query params desde cero.
+   listar con paginación/búsqueda, reusá `SoftDeleteQueryDto` + `validateQuery` de
+   `shared/pagination/` y `shared/middlewares/` (§6) en vez de crear tus propios query params
+   desde cero, y devolvé la lista como `Page<T>` (`pagination.types.ts`).
 3. `infrastructure/persistence/in-memory-<modulo>.repository.ts` (o el adaptador real: Mongo,
    Postgres, etc., implementando la misma interfaz).
-4. `infrastructure/http/<modulo>.controller.ts` + `<modulo>.routes.ts`. Agregá el bloque
-   `@swagger` en las rutas para que aparezca en `/api-docs` (§11), e importá el DTO en
-   `shared/swagger/schemas.ts` si querés que su schema se documente ahí.
+4. `infrastructure/http/<modulo>.controller.ts` + `<modulo>.routes.ts`. Si la ruta recibe un
+   `:id` numérico, enganchá `validateIdParam` con `router.param('id', validateIdParam)` (§6).
+   Agregá el bloque `@swagger` en las rutas para que aparezca en `/api-docs` (§11), e importá
+   el DTO en `shared/swagger/schemas.ts` si querés que su schema se documente ahí.
 5. Registrar todo en `composition-root.ts` (instanciar e inyectar) y montar el router en
    `interfaces/http/routes.ts`.
 
 Si el módulo llama a un servicio externo (una API de terceros, otro storage), envolvé esa
 llamada con `createCircuitBreaker` (§8) siguiendo el mismo patrón que
-`CloudinaryFileStorage`, en vez de llamarlo "a pelo".
+`CloudinaryFileStorage`, en vez de llamarlo "a pelo". Si el módulo necesita una tarea periódica
+(limpieza, sincronización), describila como un `CronJob` y registrala en un `NodeCronScheduler`
+(§10) en vez de usar `setInterval` a mano.
 
 ---
 
 ## 16. Siguientes pasos típicos al partir de este template
 
 - Reemplazar `InMemoryUserRepository` por un adaptador real (Mongoose/TypeORM/Prisma) sin
-  tocar `application/` ni `infrastructure/http/` — `shared/database/` está vacía a propósito,
-  ahí va tu `data-source`/conexión cuando decidas cuál ORM usar.
+  tocar `application/` ni `infrastructure/http/` — `shared/database/` está vacía a propósito;
+  ahí va tu `data-source`/conexión (con sus propias env vars tipadas en `env.ts`, ver §13)
+  cuando decidas cuál ORM usar.
 - Conectar `UploadFilesUseCase` al `CloudinaryFileStorage` que ya existe en `shared/cloudinary/`
   (§9) en vez de solo devolver el resumen del archivo.
-- Agregar validación (`validateDTO`) al `PATCH /api/products/:id`, que hoy acepta cualquier
-  body sin chequear nada.
-- Registrar el primer job real con `createCronJob` (§10) — hoy el factory existe pero no hay
-  ningún job dado de alta en `index.ts`.
+- Agregar validación (`validateDTO` + `validateIdParam`) al `PATCH /api/products/:id`, que hoy
+  acepta cualquier body y cualquier `:id` sin chequear nada.
+- Terminar (o crear) los módulos `category` y `product` con persistencia real: `schemas.ts` ya
+  importa sus DTOs (`create-category.dto`, `update-category.dto`, `create-product.dto`,
+  `update-product.dto`, `product-query.dto`) pero esos archivos **no existen todavía** — hoy
+  eso rompe el arranque de Swagger (§11). Las carpetas vacías `modules/product/domain/` e
+  `modules/product/infrastructure/persistence/` ya están scaffoldeadas para ese trabajo.
+- Registrar el primer job real con `NodeCronScheduler` (§10) — hoy el puerto/adaptador existen
+  y están testeados, pero `composition-root.ts`/`index.ts` no instancian ningún `Scheduler`
+  (por ejemplo, una limpieza periódica de fotos huérfanas en Cloudinary, con su propia env var
+  para la expresión cron).
 - Agregar autenticación (JWT) como middleware + módulo `auth`.
 - Documentar cada endpoint nuevo con su bloque `@swagger` (§11) para que `/api-docs` se
   mantenga al día.
 
 ---
 
-## 17. Nota
+## 17. Nota sobre el módulo `product`
+
+`modules/product/` hoy solo tiene el caso de uso de ejemplo `NotifyProductUpdatedUseCase` (ver
+§5 y §12) — no hay entidad, repositorio ni persistencia. Las carpetas `domain/` e
+`infrastructure/persistence/` existen vacías como scaffold para cuando este módulo pase a tener
+las 3 capas completas (siguiendo `user/` como referencia, §15). Hasta entonces, tratalo como el
+resto de los módulos "ilustrativos" (`file-upload`, `notification`): útil para ver el patrón de
+Socket.IO en acción, no como base de un CRUD real todavía.
+
+---
+
+## 18. Nota
 
 Esta aplicación es de uso libre como punto de partida.

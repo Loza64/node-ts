@@ -21,7 +21,6 @@ export const urlEncodeConfig = {
   parameterLimit: 1000,
 };
 
-// Unica fuente de verdad para multer
 export const multerConfig = {
   fileSizeLimitMB: 10,
 };

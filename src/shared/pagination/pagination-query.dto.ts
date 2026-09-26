@@ -28,5 +28,5 @@ export class SoftDeleteQueryDto extends SearchQueryDto {
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
-  delete: boolean = false;
+  deleted: boolean = false;
 }
