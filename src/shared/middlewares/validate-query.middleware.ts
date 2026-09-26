@@ -5,9 +5,9 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { flattenValidationErrors } from './validation-errors.util';
 
-export const validateDTO = <T extends object>(dtoClass: ClassConstructor<T>) => {
+export const validateQuery = <T extends object>(dtoClass: ClassConstructor<T>) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const dto = plainToInstance(dtoClass, req.body);
+    const dto = plainToInstance(dtoClass, req.query);
     const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
 
     if (errors.length > 0) {
@@ -18,7 +18,7 @@ export const validateDTO = <T extends object>(dtoClass: ClassConstructor<T>) => 
       return;
     }
 
-    req.body = dto;
+    req.validatedQuery = dto;
     next();
   };
 };

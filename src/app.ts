@@ -8,6 +8,9 @@ import { buildApiRouter } from './interfaces/http/routes';
 import { errorHandler } from './shared/middlewares/error-handler.middleware';
 import { corsConfig, jsonConfig, urlEncodeConfig } from './shared/config/express.config';
 
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './swagger';
+
 export const createApp = (): Express => {
   const app = express();
   const container = buildContainer();
@@ -19,6 +22,7 @@ export const createApp = (): Express => {
   app.use(morgan('dev'));
 
   app.use('/api', buildApiRouter(container));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
   app.use(errorHandler);
 
