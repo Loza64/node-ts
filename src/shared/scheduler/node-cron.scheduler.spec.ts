@@ -7,8 +7,8 @@ const mockValidate = jest.fn().mockReturnValue(true);
 jest.mock('node-cron', () => ({
   __esModule: true,
   default: {
-    schedule: (...args: unknown[]) => mockSchedule(...args),
-    validate: (...args: unknown[]) => mockValidate(...args),
+    schedule: mockSchedule,
+    validate: mockValidate,
   },
 }));
 
@@ -80,7 +80,7 @@ describe('NodeCronScheduler', () => {
   });
 
   it('skips a tick while the previous run of the same job is still in flight', async () => {
-    let resolveFirstRun: () => void = () => {};
+    let resolveFirstRun: () => void = () => { };
     const job = makeJob({
       run: jest.fn().mockImplementation(
         () => new Promise<void>((resolve) => { resolveFirstRun = resolve; }),
