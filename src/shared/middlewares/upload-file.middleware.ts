@@ -1,6 +1,6 @@
 import multer, { MulterError } from 'multer';
 import type { Request, Response, NextFunction } from 'express';
-import { multerConfig } from 'src/shared/config/express.config';
+import { multerConfig } from '../config/express.config';
 
 const upload = multer({
   storage: multer.memoryStorage(),

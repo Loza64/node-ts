@@ -1,6 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-import { DELETED_STATUSES, DeletedStatus } from './pagination.types';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class PaginationQueryDto {
   @IsOptional()
@@ -27,6 +26,7 @@ export class SearchQueryDto extends PaginationQueryDto {
 
 export class SoftDeleteQueryDto extends SearchQueryDto {
   @IsOptional()
-  @IsIn(DELETED_STATUSES)
-  status: DeletedStatus = 'active';
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  delete: boolean = false;
 }

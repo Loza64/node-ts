@@ -2,30 +2,34 @@
 
 Backend base en **Node.js + TypeScript + Express**, organizado con **Clean Architecture /
 Arquitectura Hexagonal (Ports & Adapters)**. Pensado como plantilla de arranque: sin base de
-datos real conectada (usa un repositorio en memoria como placeholder) y con Docker, Jest e
-imports absolutos ya configurados.
+datos real conectada (usa un repositorio en memoria como placeholder), con documentación
+OpenAPI autogenerada, resiliencia (circuit breaker), tareas programadas (cron) y un adaptador
+de almacenamiento de archivos (Cloudinary) ya listo para conectar cuando lo necesites.
 
 ---
 
 ## 1. Stack técnico
 
-| Categoría          | Tecnología                                   |
-|---------------------|-----------------------------------------------|
-| Runtime             | Node.js 22 (Alpine en Docker)                 |
-| Lenguaje            | TypeScript 5.9                                |
-| Framework HTTP      | Express 5                                     |
-| Tiempo real         | Socket.IO 4.8                                 |
-| Validación          | class-validator + class-transformer           |
-| Seguridad HTTP      | Helmet, CORS                                  |
-| Logging             | morgan (HTTP) + debug (interno)               |
-| Subida de archivos  | Multer (memoria)                              |
-| Hashing             | bcryptjs                                      |
-| Testing             | Jest + ts-jest + Supertest                    |
-| Lint                | ESLint (flat config) + typescript-eslint      |
-| Gestor de paquetes  | pnpm (workspace)                              |
-| Contenedor          | Docker multi-stage                            |
-| Dev runner          | ts-node-dev + tsconfig-paths                  |
-| Build               | tsc + tsc-alias (resuelve imports absolutos)  |
+| Categoría              | Tecnología                                    |
+|------------------------|------------------------------------------------|
+| Runtime                | Node.js                                        |
+| Lenguaje               | TypeScript                                     |
+| Framework HTTP         | Express                                        |
+| Tiempo real            | Socket.IO                                      |
+| Validación             | class-validator + class-transformer            |
+| Seguridad HTTP         | Helmet, CORS                                   |
+| Logging                | morgan (HTTP) + debug (interno)                |
+| Subida de archivos     | Multer (memoria)                               |
+| Almacenamiento externo | Cloudinary (adaptador listo, aún no conectado) |
+| Resiliencia            | opossum (circuit breaker)                      |
+| Tareas programadas     | node-cron                                      |
+| Documentación API      | swagger-jsdoc + swagger-ui-express + class-validator-jsonschema |
+| Hashing                | bcryptjs                                       |
+| Testing                | Jest + ts-jest + Supertest                     |
+
+> Este documento asume que el resto del tooling de proyecto (gestor de paquetes, Docker,
+> configuración de imports, lint, scripts de `package.json`) sigue vigente tal como lo tengas
+> configurado; aquí nos enfocamos en documentar `src/` — el código de la aplicación.
 
 ---
 
@@ -33,8 +37,8 @@ imports absolutos ya configurados.
 
 ```
 src/modules/<modulo>/
-├── domain/           # Entidades + interfaces (puertos). No conoce express/socket.io/db.
-├── application/      # Casos de uso (Use Cases). Orquesta el dominio. No sabe de HTTP.
+├── domain/            # Entidades + interfaces (puertos). No conoce express/socket.io/db.
+├── application/       # Casos de uso (Use Cases). Orquesta el dominio. No sabe de HTTP.
 └── infrastructure/    # Adaptadores concretos: controllers HTTP, rutas, persistencia, websockets.
     ├── http/
     └── persistence/ (o websocket/)
@@ -43,19 +47,11 @@ src/modules/<modulo>/
 **Regla de dependencia**: `infrastructure` → depende de → `application` → depende de →
 `domain`. Nunca al revés. El dominio no sabe que existe Express, Socket.IO ni ningún ORM.
 
-### Por qué así y no carpetas por tipo de archivo
-
-En vez de agrupar por verbo HTTP (`get.route.ts`, `post.route.ts`...) que mezcla infraestructura
-con features, cada **módulo es autocontenido** (`user`, `file-upload`, `notification`,
-`product`, `health`) y las rutas quedan organizadas por **recurso**:
-
-```http
-GET    /api/health/hello
-POST   /api/users
-POST   /api/files/upload
-GET    /api/notifications/notify
-PATCH  /api/products/:id
-```
+No todos los módulos usan las 3 capas completas: los módulos de ejemplo más simples
+(`file-upload`, `notification`, `product`) se saltan `domain/` porque no tienen una entidad de
+negocio propia que proteger — son ilustrativos de un patrón (subida de archivos, tiempo real),
+no de una entidad completa. `user` es el único módulo con las 3 capas completas y es la
+referencia a seguir cuando agregues un módulo con persistencia real.
 
 ### Use Cases
 
@@ -66,9 +62,10 @@ permite testear toda la lógica de negocio sin levantar Express ni una base de d
 
 ### Ports & Adapters
 
-- **Puerto** = interfaz definida en `domain/` (ej. `UserRepository`, `NotificationPublisher`).
-- **Adaptador** = implementación concreta en `infrastructure/` (ej. `InMemoryUserRepository`,
-  `SocketNotificationPublisher`).
+- **Puerto** = interfaz definida en `domain/` o `shared/` (ej. `UserRepository`,
+  `SocketPublisher`, `FileStorage`).
+- **Adaptador** = implementación concreta en `infrastructure/` o `shared/` (ej.
+  `InMemoryUserRepository`, `SocketPublisherNotification`, `CloudinaryFileStorage`).
 
 Hoy `UserRepository` está implementado en memoria (`InMemoryUserRepository`) como placeholder.
 El día que conectes una base de datos real, creás `TypeOrmUserRepository implements
@@ -79,11 +76,10 @@ UserRepository` (o Mongoose, Prisma, etc.) y cambiás **una sola línea** en
 
 `src/composition-root.ts` es el único archivo que conoce simultáneamente las interfaces y sus
 implementaciones concretas: aquí se instancian los repositorios/adaptadores y se inyectan "a
-mano" (constructor injection) en los use cases y controllers, sin framework de DI — igual que
-lo haría cualquier proyecto Express serio.
+mano" (constructor injection) en los use cases y controllers, sin framework de DI.
 
-`src/app.ts` arma el `container` (llamando a `buildContainer()`) y monta las rutas de cada
-módulo bajo el prefijo `/api`.
+`src/app.ts` arma el `container` (llamando a `buildContainer()`), monta las rutas de cada
+módulo bajo `/api` y expone la documentación interactiva en `/api-docs`.
 
 ---
 
@@ -97,12 +93,13 @@ src/
 ├── app.spec.ts                     # Test de integración con supertest
 ├── composition-root.ts             # DI manual: instancia repos/use cases/controllers
 ├── index.ts                        # Entry point: crea httpServer, monta sockets, escucha PORT
+├── swagger.ts                      # Arma el spec OpenAPI (swagger-jsdoc) a partir de los DTOs y comentarios @swagger
 ├── interfaces/
 │   └── http/routes.ts              # Router raíz /api, monta cada módulo
 ├── modules/
 │   ├── health/
-│   │   └── infrastructure/http/health.routes.ts
-│   ├── user/
+│   │   └── infrastructure/http/health.routes.ts        # /health/hello, /health/circuit-breakers
+│   ├── user/                                            # Módulo de referencia (3 capas completas)
 │   │   ├── domain/
 │   │   │   ├── user.entity.ts
 │   │   │   └── user.repository.ts       # Puerto (interfaz)
@@ -126,18 +123,38 @@ src/
     ├── config/
     │   ├── env.ts                  # Variables de entorno tipadas
     │   └── express.config.ts       # CORS, límites de JSON/urlencoded, multer
+    ├── cloudinary/                 # Adaptador de almacenamiento de archivos (ver §9)
+    │   ├── cloudinary.port.ts          # Puerto: FileStorage
+    │   ├── cloudinary.adapter.ts        # Adaptador: CloudinaryFileStorage (con circuit breaker)
+    │   ├── cloudinary.adapter.spec.ts
+    │   └── cloudinary.config.ts         # Configura el SDK de cloudinary con las env vars
+    ├── database/                   # Vacía a propósito: aquí va tu data source cuando conectes un ORM
+    ├── dto/
+    │   └── id-ref.dto.ts            # DTO genérico { id: number } de referencia para swagger
     ├── errors/AppError.ts          # Error operacional con statusCode
     ├── logger/logger.ts            # Namespaces de `debug`
     ├── middlewares/
     │   ├── error-handler.middleware.ts
     │   ├── upload-file.middleware.ts
-    │   └── validate-dto.middleware.ts
+    │   ├── validate-dto.middleware.ts
+    │   └── validation-errors.util.ts
+    ├── pagination/
+    │   └── pagination-query.dto.ts  # DTOs de query params (paginación/búsqueda/soft-delete), ver §7
     ├── realtime/
-    │   ├── notification-publisher.port.ts     # Puerto
+    │   ├── socket-publisher.port.ts             # Puerto
     │   └── websocket/
-    │       ├── socket.gateway.ts               # Server socket.io real
-    │       ├── socket.types.ts                 # Tipado de eventos
-    │       └── socket-notification.publisher.ts # Adaptador del puerto
+    │       ├── socket.gateway.ts                 # Server socket.io real
+    │       ├── socket.types.ts                   # Tipado de eventos
+    │       └── socket-publisher.notification.ts  # Adaptador del puerto
+    ├── resilience/                 # Circuit breaker genérico, ver §8
+    │   ├── circuit-breaker.factory.ts
+    │   ├── circuit-breaker.factory.spec.ts
+    │   ├── circuit-breaker.registry.ts
+    │   └── circuit-breaker.errors.ts
+    ├── scheduler/
+    │   └── cron.factory.ts         # Factory genérico para registrar cron jobs, ver §10
+    ├── swagger/
+    │   └── schemas.ts               # Convierte los DTOs (decorators de class-validator) en JSON Schema
     └── utils/bcrypt.util.ts        # hash / compare de contraseñas
 ```
 
@@ -155,43 +172,86 @@ src/
    - Middlewares globales, en orden: `helmet()` → `cors()` → `express.json()` →
      `express.urlencoded()` → `morgan('dev')`.
    - Monta el router de la API bajo `/api`.
+   - Monta Swagger UI en `/api-docs` (ver §11).
    - `errorHandler` al final, como manejador de errores centralizado.
 
 ---
 
 ## 5. Endpoints disponibles
 
-| Método | Ruta                     | Descripción                                              |
-|--------|--------------------------|-----------------------------------------------------------|
-| GET    | `/api/health/hello`      | Health check simple                                       |
-| POST   | `/api/users`              | Crea un usuario (valida DTO, hashea password, evita duplicados por email) |
-| POST   | `/api/files/upload`       | Sube uno o varios archivos (multipart/form-data)          |
-| GET    | `/api/notifications/notify` | Dispara un `broadcast()` por socket a todos los conectados |
-| PATCH  | `/api/products/:id`       | Actualiza un producto de ejemplo y emite por socket a la sala `product:<id>` |
+| Método | Ruta                          | Descripción                                                                |
+|--------|-------------------------------|------------------------------------------------------------------------------|
+| GET    | `/api/health/hello`           | Health check simple                                                          |
+| GET    | `/api/health/circuit-breakers`| Estado y estadísticas de todos los circuit breakers registrados             |
+| POST   | `/api/users`                   | Crea un usuario (valida DTO, hashea password, evita duplicados por email)   |
+| POST   | `/api/files/upload`            | Sube uno o varios archivos (multipart/form-data), devuelve su metadata      |
+| GET    | `/api/notifications/notify`    | Dispara un `broadcast()` por socket a todos los conectados                  |
+| PATCH  | `/api/products/:id`            | Actualiza un producto de ejemplo y emite por socket a la sala `product:<id>`|
+| GET    | `/api-docs`                     | Swagger UI, documentación interactiva de la API                            |
 
-### Ejemplo: crear usuario
+### Regla de negocio: `POST /api/users`
+
+Validaciones (`CreateUserDto`, ver §6): `name` (string, 2-60 chars), `email` (formato válido),
+`password` (string, mínimo 8 chars). Si sobra un campo no declarado en el DTO, `class-validator`
+lo rechaza (`forbidNonWhitelisted: true`).
 
 ```http
 POST /api/users
 Content-Type: application/json
 
-{
-  "name": "Loza",
-  "email": "loza@example.com",
-  "password": "12345678"
-}
+{ "name": "Loza", "email": "loza@example.com", "password": "12345678" }
 ```
 
-Validaciones (`CreateUserDto`): `name` (string, 2-60 chars), `email` (formato válido),
-`password` (string, mínimo 8 chars). Si sobra un campo no declarado en el DTO, `class-validator`
-lo rechaza (`forbidNonWhitelisted: true`).
+El **use case** (`CreateUserUseCase`) aplica dos reglas de negocio adicionales que el DTO por sí
+solo no puede expresar:
+
+1. **Email único**: busca primero con `userRepository.findByEmail(email)`; si ya existe,
+   lanza `AppError('Ya existe un usuario con ese correo', 409)` — nunca llega a guardar un
+   segundo usuario con el mismo correo.
+2. **La contraseña nunca se guarda en texto plano**: se hashea con `bcryptjs`
+   (`encryptPass`, costo 10) antes de construir la entidad `User`.
 
 Respuesta 201:
 ```json
 { "message": "User created", "data": { "id": "...", "name": "Loza", "email": "loza@example.com", "createdAt": "..." } }
 ```
 
-`passwordHash` nunca se serializa (el `toPublic()` de la entidad lo excluye a propósito).
+`passwordHash` **nunca** se serializa hacia el cliente — `User.toPublic()` lo excluye a
+propósito, incluso aunque alguien accidentalmente hiciera `res.json(user)` en vez de
+`res.json(user.toPublic())` en un módulo nuevo, conviene mantener esa misma convención.
+
+### Regla de negocio: `POST /api/files/upload`
+
+- Tamaño máximo por archivo: `multerConfig.fileSizeLimitMB` (10 MB por defecto,
+  `shared/config/express.config.ts`). Si se excede, `upload-file.middleware.ts` responde
+  `400` con el mensaje de Multer.
+- Solo procesa la request si el `Content-Type` incluye `multipart/form-data`; si no, sigue de
+  largo con `next()` sin tocar nada.
+- **No hay persistencia real todavía**: `UploadFilesUseCase.execute()` solo devuelve un resumen
+  (`name`, `size`, `mimetype`) de cada archivo recibido. Los bytes viven en memoria
+  (`multer.memoryStorage()`) y se descartan al terminar el request — el adaptador de Cloudinary
+  ya existe (§9) pero **no está conectado** a este use case.
+
+```http
+POST /api/files/upload
+Content-Type: multipart/form-data; boundary=...
+```
+Respuesta 200:
+```json
+{ "total": 2, "files": [{ "name": "foto.png", "size": 20481, "mimetype": "image/png" }, ...] }
+```
+
+### Regla de negocio: `GET /api/notifications/notify` y `PATCH /api/products/:id`
+
+Ambos son ejemplos de "fire and forget" hacia Socket.IO, no tienen reglas de validación:
+
+- `notify` dispara un mensaje fijo (`'Hola a todos desde el servidor'`) a **todos** los clientes
+  conectados vía `broadcast()` (evento `notification`).
+- `PATCH /products/:id` **no valida el body** (no usa `validateDTO`): toma `req.body` tal cual,
+  lo devuelve en la respuesta y lo reenvía por el evento `event` únicamente a los sockets que
+  se hayan unido a la sala `product:<id>` (`emitToRoom`). Es un ejemplo de "notificar un cambio
+  a quien esté mirando ese recurso en particular" — al construir un módulo real con persistencia,
+  aquí deberías agregar su propio DTO de validación antes de llamar al use case.
 
 ---
 
@@ -202,10 +262,43 @@ Respuesta 201:
 1. Convierte el `req.body` plano a instancia de la clase con `plainToInstance`.
 2. Corre `class-validator` con `whitelist: true, forbidNonWhitelisted: true` (rechaza props
    extra no declaradas en el DTO).
-3. Si hay errores, responde `400` con los mensajes concatenados.
+3. Si hay errores, responde `400` con los mensajes concatenados (aplanados recursivamente por
+   `flattenValidationErrors`, incluso para errores anidados de objetos/arrays dentro del DTO).
 4. Si pasa, reemplaza `req.body` por el DTO ya validado/tipado y sigue con `next()`.
 
-Se usa como middleware de ruta: `router.post('/', validateDTO(CreateUserDto), controller.create)`.
+Se usa como middleware de ruta:
+```ts
+router.post('/', validateDTO(CreateUserDto), controller.create);
+```
+
+### DTOs de referencia en `shared/` (aún no wireados a una ruta)
+
+Estos DTOs existen como **contrato listo para usar** el día que agregues un endpoint de
+listado o de referencia por id — no dependen de ningún ORM en particular, así que sirven sin
+importar qué elijas conectar después:
+
+- **`IdRefDto`** (`shared/dto/id-ref.dto.ts`): `{ id: number }`, valida un id entero positivo.
+  Útil para el body de un DTO anidado que solo referencia otra entidad por su id (ej.
+  `category: IdRefDto` dentro de un `CreateProductDto`).
+- **`PaginationQueryDto` / `SearchQueryDto` / `SoftDeleteQueryDto`**
+  (`shared/pagination/pagination-query.dto.ts`): query params reutilizables para cualquier
+  listado (ver ejemplo abajo).
+
+```ts
+// Ejemplo de uso al construir un endpoint de listado nuevo:
+import { Router } from 'express';
+import { SoftDeleteQueryDto } from '../../../../shared/pagination/pagination-query.dto';
+
+router.get('/', validateQuery(SoftDeleteQueryDto), controller.findAll);
+// GET /api/products?page=2&pageSize=20&search=camisa&delete=true
+```
+
+`SoftDeleteQueryDto` extiende `SearchQueryDto`, que extiende `PaginationQueryDto` — así que
+trae `page` (default 1), `pageSize` (default 10, máx 100), `search` (opcional, recortado y
+máx 100 chars) y `delete` (boolean, default `false`: `true` → solo eliminados,
+`false`/ausente → solo activos). No existe hoy un middleware `validateQuery` en la plantilla
+—si lo necesitás, seguí el mismo patrón que `validate-dto.middleware.ts` pero
+sobre `req.query` en vez de `req.body`.
 
 ---
 
@@ -226,33 +319,201 @@ Formato de error estándar:
 
 ---
 
-## 8. Subida de archivos
+## 8. Resiliencia: Circuit Breaker (`shared/resilience/`)
 
-`shared/middlewares/upload-file.middleware.ts`:
+Patrón "circuit breaker" genérico sobre [opossum](https://www.npmjs.com/package/opossum),
+pensado para envolver **cualquier llamada a un servicio externo que pueda fallar o colgarse**
+(una API de terceros, un storage, otro microservicio) — no depende de ningún ORM ni de
+Cloudinary en particular.
 
-- Usa `multer` con `memoryStorage()` (no escribe a disco, los archivos quedan en buffer).
-- Límite configurable en `shared/config/express.config.ts` → `multerConfig.fileSizeLimitMB`
-  (10 MB por defecto).
-- Solo procesa la request si el `Content-Type` incluye `multipart/form-data`; si no, hace
-  `next()` y sigue de largo.
-- Normaliza `req.files` sea cual sea la forma en que Multer los entregue (`.any()`, un solo
-  `req.file`, o un objeto agrupado por campo) para que el controller siempre reciba un array
-  plano `Express.Multer.File[]`.
-- `UploadFilesUseCase` solo devuelve un resumen: nombre, tamaño y mimetype de cada archivo. No
-  hay persistencia real todavía (sería el siguiente paso: subir a Cloudinary/S3 desde un
-  adaptador nuevo).
+### Regla de negocio
+
+- Si una acción falla repetidamente (por defecto: **50% de error rate** con al menos
+  **5 llamadas** de volumen — `CB_ERROR_THRESHOLD_PERCENTAGE` / `CB_VOLUME_THRESHOLD`), el
+  circuito se **abre**: las siguientes llamadas ni siquiera intentan la acción real, fallan
+  al instante con `EOPENBREAKER`.
+- Tras `CB_RESET_TIMEOUT_MS` (15s por defecto) el circuito pasa a **half-open** y prueba una
+  sola llamada; si funciona, vuelve a cerrar, si falla, se reabre.
+- Cada llamada tiene un `timeout` propio (`CB_TIMEOUT_MS`, 8s por defecto): si tarda más, se
+  cuenta como fallo aunque la promesa nunca rechace.
+- `errorFilter` permite decidir qué errores **no** deben contar como falla real del servicio
+  (ej. un 404 "no encontrado" es un error del cliente, no del proveedor externo — no debería
+  abrir el circuito).
+
+### Cómo usarlo en un adaptador nuevo
+
+```ts
+import { createCircuitBreaker } from '../resilience/circuit-breaker.factory';
+import { isCircuitBreakerFailure } from '../resilience/circuit-breaker.errors';
+import { AppError } from '../errors/AppError';
+
+export class MiAdaptadorExterno {
+  private readonly breaker = createCircuitBreaker(
+    (id: string) => this.llamarServicioReal(id),
+    { name: 'mi-servicio.accion', errorFilter: (err) => (err as any)?.http_code < 500 },
+  );
+
+  async ejecutar(id: string) {
+    try {
+      return await this.breaker.fire(id);
+    } catch (err) {
+      if (isCircuitBreakerFailure(err)) {
+        throw new AppError('El servicio externo no está disponible ahora mismo', 503);
+      }
+      throw err; // error real del negocio/cliente, no del circuito
+    }
+  }
+
+  private async llamarServicioReal(id: string) { /* fetch/sdk real */ }
+}
+```
+
+Esto es exactamente lo que hace `CloudinaryFileStorage` (§9): un breaker por operación
+(`upload`, `destroy`, `setTags`), y un `fire()` que traduce cualquier apertura de circuito en
+un `503 AppError` legible para el cliente en vez de dejar escapar un error interno de opossum.
+
+### Observabilidad: `GET /api/health/circuit-breakers`
+
+`circuit-breaker.registry.ts` lleva un registro global (`Map`) de todos los breakers creados
+con `createCircuitBreaker(...)` en toda la app. `health.routes.ts` expone su estado:
+
+```json
+{
+  "data": [
+    {
+      "name": "cloudinary.upload",
+      "state": "closed",
+      "enabled": true,
+      "stats": { "fires": 12, "successes": 11, "failures": 1, "rejects": 0, "timeouts": 0, "latencyMeanMs": 340 }
+    }
+  ]
+}
+```
+
+Cada nuevo `createCircuitBreaker(...)` que agregues en cualquier módulo aparece automáticamente
+aquí — no hace falta registrar nada a mano.
 
 ---
 
-## 9. Tiempo real (Socket.IO)
+## 9. Almacenamiento de archivos: Cloudinary (`shared/cloudinary/`)
+
+**Puerto**: `FileStorage` (`cloudinary.port.ts`) — define `upload`, `destroy`, `setTags`.
+**Adaptador**: `CloudinaryFileStorage` (`cloudinary.adapter.ts`) — implementa el puerto contra
+la API real de Cloudinary, con un circuit breaker independiente por operación (§8).
+
+> ⚠️ **Este adaptador existe pero todavía no está conectado a ningún módulo.**
+> `UploadFilesUseCase` (file-upload) hoy solo lee la metadata del archivo en memoria y la
+> devuelve — no llama a `CloudinaryFileStorage`. Conectarlo es uno de los "siguientes pasos"
+> típicos (§13): inyectás `CloudinaryFileStorage` en el use case y reemplazás el resumen plano
+> por el resultado real de `storage.upload(file, env.CLOUDINARY_FOLDER)`.
+
+### Regla de negocio
+
+- Cada archivo subido genera automáticamente una variante "eager" de 400×400 recortada
+  (`crop: 'fill', gravity: 'auto'`) además del original — pensado para tener ya un thumbnail
+  sin pedirlo aparte.
+- Los errores "de cliente" (`http_code < 500`, ej. `publicId` inexistente al hacer `destroy`)
+  **no** cuentan para abrir el circuit breaker (`errorFilter: isClientError`) — solo los
+  errores 5xx (caídas reales de Cloudinary) lo abren.
+- Si el circuito está abierto, cualquier llamada (`upload`/`destroy`/`setTags`) falla con un
+  `AppError('...no está disponible en este momento...', 503)` en vez de colgar el request.
+
+```ts
+// Ejemplo de cómo conectarlo en composition-root.ts el día que lo actives:
+import { CloudinaryFileStorage } from './shared/cloudinary/cloudinary.adapter';
+
+const fileStorage = new CloudinaryFileStorage();
+const uploadFilesUseCase = new UploadFilesUseCase(fileStorage, env.CLOUDINARY_FOLDER);
+```
+
+---
+
+## 10. Tareas programadas: node-cron (`shared/scheduler/cron.factory.ts`)
+
+Factory genérico para registrar cron jobs, agnóstico de qué haga la tarea por dentro (no sabe
+ni le importa si la tarea toca una base de datos, un archivo, o solo hace un `fetch`).
+
+### Regla de negocio
+
+- **Protección contra solapamiento**: si una corrida todavía está en curso cuando el cron
+  vuelve a disparar, el nuevo tick se **omite** (no se ejecutan dos corridas del mismo job en
+  paralelo).
+- **Falla rápido**: si la expresión cron no es válida (`cron.validate`), lanza un error al
+  registrar el job — mejor descubrirlo al arrancar el server que en producción, cuando el job
+  simplemente nunca corra.
+- Cualquier error no controlado dentro de la tarea se loguea (`errorLog`) pero **no tumba el
+  proceso** — el próximo tick se intenta igual.
+
+### Cómo usarlo
+
+```ts
+import { createCronJob } from './shared/scheduler/cron.factory';
+
+// dentro de index.ts, después de armar el container:
+const job = createCronJob({
+  name: 'orphan-photos-cleanup',
+  cronExpression: '0 * * * *', // cada hora, en punto
+  task: async () => {
+    await miUseCaseDeLimpieza.execute();
+  },
+});
+
+// en el shutdown (SIGINT/SIGTERM):
+job.stop();
+```
+
+Hoy **no hay ningún job registrado** en `index.ts` — el factory queda listo para el primer job
+real que necesites (limpieza de datos huérfanos, sincronizaciones periódicas, envío de reportes,
+etc.), sin acoplarlo a ningún ORM.
+
+---
+
+## 11. Documentación OpenAPI (Swagger)
+
+Tres piezas trabajando juntas:
+
+1. **`shared/swagger/schemas.ts`**: usa `class-validator-jsonschema` para convertir los
+   *decorators* de `class-validator` de cualquier DTO importado (`IdRefDto`,
+   `PaginationQueryDto`/`SearchQueryDto`/`SoftDeleteQueryDto`, `CreateUserDto`, ...) en JSON
+   Schema real, sin escribirlo a mano. **Para que un DTO nuevo aparezca en `/api-docs`, hay
+   que importarlo (aunque sea solo por su efecto secundario) en este archivo.**
+2. **`src/swagger.ts`**: arma el spec OpenAPI completo con `swagger-jsdoc`, tomando los
+   schemas del punto anterior más los bloques de comentario `@swagger` que escribas en los
+   archivos `*.routes.ts` (ver ejemplo en `health.routes.ts`).
+3. **`app.ts`**: monta `swagger-ui-express` en `/api-docs` con ese spec.
+
+### Cómo documentar un endpoint nuevo
+
+```ts
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   patch:
+ *     summary: Actualiza un producto y notifica el cambio por socket
+ *     tags: [Product]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Producto actualizado
+ */
+router.patch('/:id', controller.update);
+```
+
+---
+
+## 12. Tiempo real (Socket.IO)
 
 ### Arquitectura
 
 Sigue el mismo patrón de puertos y adaptadores que el resto de la app:
 
-- **Puerto**: `NotificationPublisher` (`shared/realtime/notification-publisher.port.ts`) define
-  `broadcast(message)` y `emitToRoom(room, message)`.
-- **Adaptador**: `SocketNotificationPublisher` implementa el puerto usando el gateway real de
+- **Puerto**: `SocketPublisher` (`shared/realtime/socket-publisher.port.ts`) define
+  `broadcast(payload)` y `emitToRoom(room, payload)`.
+- **Adaptador**: `SocketPublisherNotification` implementa el puerto usando el gateway real de
   socket.io.
 - Los use cases (`NotifyAllUseCase`, `NotifyProductUpdatedUseCase`) solo conocen el puerto, no
   importan `socket.io` directamente. Esto permite testear esos use cases con un mock del puerto,
@@ -264,20 +525,20 @@ Sigue el mismo patrón de puertos y adaptadores que el resto de la app:
   Express (`corsConfig`), y queda montado sobre el servidor HTTP nativo.
 - `getSocketIO()` expone la instancia ya inicializada (lanza error si se llama antes de
   `initSocket`).
-- Maneja los eventos de sala: `join`, `leave`, `event`, y loguea conexión /
+- Maneja los eventos de sala: `join`, `leave`, `event`, `message`, y loguea conexión /
   desconexión / errores con `socketLog`.
 
 ### Eventos tipados (`socket.types.ts`)
 
-| Dirección          | Evento          | Payload                                              |
-|---------------------|-----------------|-------------------------------------------------------|
-| Cliente → Servidor   | `join`      | `room: string, callback?: (ok: boolean) => void`      |
-| Cliente → Servidor   | `leave`     | `room: string, callback?: (ok: boolean) => void`      |
-| Cliente → Servidor   | `event`   | `{ room, message }`                                   |
-| Servidor → Cliente   | `user_joined`    | `{ socketId, room }`                                  |
-| Servidor → Cliente   | `user_left`      | `{ socketId, room }`                                  |
-| Servidor → Cliente   | `event`   | `{ from, room, message }`                             |
-| Servidor → Cliente   | `notification`   | `{ message }`                                          |
+| Dirección           | Evento         | Payload                                          |
+|----------------------|----------------|----------------------------------------------------|
+| Cliente → Servidor   | `join`         | `room: string, callback?: (ok: boolean) => void`   |
+| Cliente → Servidor   | `leave`        | `room: string, callback?: (ok: boolean) => void`   |
+| Cliente → Servidor   | `event`        | `{ room, payload }`                                |
+| Cliente → Servidor   | `message`      | `{ room, payload }`                                |
+| Servidor → Cliente   | `event`        | `payload`                                          |
+| Servidor → Cliente   | `message`      | `payload`                                          |
+| Servidor → Cliente   | `notification` | `payload`                                          |
 
 ### Ejemplo cliente
 
@@ -288,202 +549,137 @@ const socket = io('http://localhost:4000');
 
 socket.emit('join', 'product:123', (ok) => console.log('joined?', ok));
 socket.on('event', (payload) => console.log(payload));
-socket.on('notification', (payload) => console.log(payload.message));
-socket.emit('event', { room: 'product:123', message: 'hola' });
+socket.on('notification', (payload) => console.log(payload));
+socket.emit('event', { room: 'product:123', payload: 'hola' });
 socket.emit('leave', 'product:123');
 ```
 
 ### Cómo emitir desde un use case nuevo
 
 ```ts
-import { NotificationPublisher } from '../../../shared/realtime/notification-publisher.port';
+import { SocketPublisher } from '../../../shared/realtime/socket-publisher.port';
 
 export class MiUseCase {
-  constructor(private readonly publisher: NotificationPublisher) {}
+  constructor(private readonly publisher: SocketPublisher) {}
 
   execute(id: string): void {
-    this.publisher.broadcast('algo pasó');
-    this.publisher.emitToRoom(`mi-sala:${id}`, JSON.stringify({ id }));
+    this.publisher.broadcast({ message: 'algo pasó' });
+    this.publisher.emitToRoom(`mi-sala:${id}`, { id });
   }
 }
 ```
 
 Se registra en `composition-root.ts` reutilizando la **misma instancia** de
-`SocketNotificationPublisher` que ya usan `notification` y `product`.
+`SocketPublisherNotification` que ya usan `notification` y `product`.
 
 ---
 
-## 10. Configuración y variables de entorno
+## 13. Configuración y variables de entorno
 
 `shared/config/env.ts` centraliza y tipa las variables de entorno (llama a `dotenv.config()`):
 
 ```ts
-env.PORT      // number, default 4000
-env.ORIGIN    // string | undefined (para CORS)
-env.NODE_ENV  // 'development' | 'production' | etc.
-env.isDev     // boolean, true si NODE_ENV === 'development'
+env.PORT                          // number, default 4000
+env.ORIGIN                        // string | undefined (para CORS; admite lista separada por comas)
+env.NODE_ENV                      // 'development' | 'production' | etc.
+env.isDev                         // boolean, true si NODE_ENV === 'development'
+
+env.CLOUDINARY_CLOUD_NAME         // string, default ''
+env.CLOUDINARY_API_KEY            // string, default ''
+env.CLOUDINARY_API_SECRET         // string, default ''
+env.CLOUDINARY_FOLDER             // string, default 'uploads'
+
+env.CB_TIMEOUT_MS                 // number, default 8000  — timeout por llamada del circuit breaker
+env.CB_ERROR_THRESHOLD_PERCENTAGE // number, default 50    — % de fallas para abrir el circuito
+env.CB_RESET_TIMEOUT_MS           // number, default 15000  — cuánto espera antes de medio-abrir
+env.CB_VOLUME_THRESHOLD           // number, default 5      — mínimo de llamadas antes de evaluar el %
 ```
 
-Archivo `.env.example`:
-```
+Ejemplo de `.env`:
+```dotenv
 PORT=4000
 ORIGIN=http://localhost:12312
 NODE_ENV=development
-```
 
-Para desarrollo local:
-```bash
-cp .env.example .env
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+CLOUDINARY_FOLDER=uploads
+
+CB_TIMEOUT_MS=8000
+CB_ERROR_THRESHOLD_PERCENTAGE=50
+CB_RESET_TIMEOUT_MS=15000
+CB_VOLUME_THRESHOLD=5
 ```
 
 `shared/config/express.config.ts` centraliza además:
-- `corsConfig`: origin = `env.ORIGIN` o `'*'`, `credentials` solo si hay `ORIGIN` definido.
-- `jsonConfig` / `urlEncodeConfig`: límites de tamaño de body.
-- `multerConfig`: límite de tamaño de archivo.
+- `corsConfig`: `origin` = `env.ORIGIN` (partido por comas si trae varios) o `'*'`;
+  `credentials` solo si hay `ORIGIN` definido; headers permitidos incluyen
+  `X-Internal-Api-Key` de referencia para un futuro esquema de auth interna.
+- `jsonConfig` / `urlEncodeConfig`: límites de tamaño de body (10mb / 50mb).
+- `multerConfig`: límite de tamaño de archivo (`fileSizeLimitMB`, 10 MB).
 
 ---
 
-## 11. Imports absolutos (`src/...`)
+## 14. Testing
 
-Configurado en tres capas para que funcione en dev, build y tests:
+Tres niveles de ejemplo ya incluidos, los tres sobre el módulo `user` (el único con las 3 capas
+completas):
 
-1. **`tsconfig.json`**: `baseUrl: "./"` + `paths: { "src/*": ["src/*"] }` → el compilador de
-   TS entiende el alias.
-2. **`jest.config.js`**: `moduleNameMapper: { '^src/(.*)$': '<rootDir>/$1' }` → Jest resuelve
-   el mismo alias al correr tests (`rootDir` es `src`).
-3. **Runtime**:
-   - En desarrollo: `ts-node-dev -r tsconfig-paths/register` registra el resolver de paths.
-   - En build: `tsc && tsc-alias -p tsconfig.json` — `tsc` no reescribe los imports, así que
-     `tsc-alias` los reemplaza por rutas relativas reales dentro de `build/`.
+| Nivel                  | Archivo                          | Qué prueba                                                   |
+|------------------------|-----------------------------------|-----------------------------------------------------------------|
+| Unitario (use case)    | `create-user.use-case.spec.ts`   | Mockea el `UserRepository` (puerto). Cero HTTP, cero Express. Cubre la regla de email duplicado. |
+| Unitario (controller)  | `user.controller.spec.ts`        | Mockea el use case, prueba solo la traducción HTTP.             |
+| Integración            | `app.spec.ts`                     | Levanta la app real con `supertest`: health check, body inválido (400), creación válida (201). |
 
-Ejemplo de uso: `import { AppError } from 'src/shared/errors/AppError';` en vez de rutas
-relativas largas (`../../../shared/errors/AppError`).
+A eso se suman los tests de infraestructura compartida:
 
----
-
-## 12. Testing
-
-- **Framework**: Jest + `ts-jest` (preset), `testEnvironment: 'node'`.
-- **Patrón de archivos**: `*.spec.ts` vive junto al archivo que prueba.
-- **Cobertura**: `collectCoverageFrom` incluye todo `src/**/*.ts` excepto specs y `@types`.
-
-Tres niveles de ejemplo ya incluidos:
-
-| Nivel                  | Archivo                                   | Qué prueba                                                        |
-|------------------------|---------------------------------------------|--------------------------------------------------------------------|
-| Unitario (use case)    | `create-user.use-case.spec.ts`             | Mockea el `UserRepository` (puerto). Cero HTTP, cero Express.      |
-| Unitario (controller)  | `user.controller.spec.ts`                  | Mockea el use case, prueba solo la traducción HTTP.                |
-| Integración            | `app.spec.ts`                              | Levanta la app real con `supertest` y golpea las rutas.            |
-
-```bash
-pnpm test          # correr todos los tests
-pnpm test:watch    # modo watch
-```
-
-El `Dockerfile` corre `pnpm test` **dentro del build** (stage `builder`), así que la imagen no
-se construye si algún test falla.
+| Archivo                              | Qué prueba                                                           |
+|---------------------------------------|------------------------------------------------------------------------|
+| `circuit-breaker.factory.spec.ts`     | Que el breaker abre tras suficientes fallas y que `errorFilter` evita abrir el circuito por errores de cliente. |
+| `cloudinary.adapter.spec.ts`          | Que un error real se deja pasar mientras el circuito está cerrado, y que tras varias fallas 5xx el circuito abre y falla rápido con `503 AppError` sin llamar de nuevo a Cloudinary. |
 
 ---
 
-## 13. Lint
+## 15. Cómo agregar un módulo nuevo
 
-ESLint con flat config (`eslint.config.mjs`) + `@typescript-eslint`.
-
-```bash
-pnpm run lint
-```
-
----
-
-## 14. Docker
-
-### `Dockerfile` (multi-stage)
-
-**Stage `builder`** (`node:22-alpine`):
-1. Instala dependencias nativas de compilación (`python3 make g++ libc6-compat`) y `pnpm` vía
-   corepack.
-2. Copia solo los manifiestos (`pnpm-workspace.yaml`, `package.json`, `pnpm-lock.yaml`) y corre
-   `pnpm install --frozen-lockfile` (aprovecha cache de capas de Docker).
-3. Copia el resto del código.
-4. Corre `pnpm test` — si falla, la imagen no se construye.
-5. Corre `pnpm build` (`tsc` + `tsc-alias`).
-
-**Stage `runner`** (`node:22-alpine`, `NODE_ENV=production`):
-1. Crea un usuario no-root (`nodets`) por seguridad.
-2. Copia solo lo necesario del stage anterior: `build/`, `node_modules/`, `package.json`.
-3. Corre como usuario `nodets`, expone el puerto `4000`.
-4. `CMD ["node", "build/index"]`.
-
-### `docker-compose.yaml`
-
-```yaml
-services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: nodets-backend-api
-    restart: unless-stopped
-    ports:
-      - "${PORT}:${PORT}"
-    env_file:
-      - .env
-```
-
-Sin red ni base de datos externa — este template no trae persistencia real conectada. Si más
-adelante se agrega una BD, se añadiría su propio servicio y una red compartida (como en el
-proyecto derivado de este template que sí usa MongoDB).
-
-```bash
-docker compose up --build
-```
-
-### `.dockerignore`
-
-Excluye `node_modules`, `build`, logs, coverage, `.env`, configuraciones de IDE, etc., para no
-inflar el contexto de build.
-
----
-
-## 15. Cómo agregar un módulo nuevo (ej. "product" ya es un ejemplo real)
+Seguí `user/` como plantilla si el módulo necesita persistencia real:
 
 1. `domain/<modulo>.entity.ts` + `domain/<modulo>.repository.ts` (interfaz/puerto).
-2. `application/create-<modulo>.dto.ts` + `application/create-<modulo>.use-case.ts`.
+2. `application/create-<modulo>.dto.ts` + `application/create-<modulo>.use-case.ts`. Si vas a
+   listar con paginación/búsqueda, reusá `SoftDeleteQueryDto` de `shared/pagination/` (§6) en
+   vez de crear tus propios query params desde cero.
 3. `infrastructure/persistence/in-memory-<modulo>.repository.ts` (o el adaptador real: Mongo,
-   Postgres, etc.).
-4. `infrastructure/http/<modulo>.controller.ts` + `<modulo>.routes.ts`.
+   Postgres, etc., implementando la misma interfaz).
+4. `infrastructure/http/<modulo>.controller.ts` + `<modulo>.routes.ts`. Agregá el bloque
+   `@swagger` en las rutas para que aparezca en `/api-docs` (§11), e importá el DTO en
+   `shared/swagger/schemas.ts` si querés que su schema se documente ahí.
 5. Registrar todo en `composition-root.ts` (instanciar e inyectar) y montar el router en
    `interfaces/http/routes.ts`.
 
----
-
-## 16. Scripts de `package.json`
-
-| Script              | Comando                                              | Uso                          |
-|---------------------|--------------------------------------------------------|-------------------------------|
-| `pnpm dev`          | `ts-node-dev -r tsconfig-paths/register src/index.ts` | Desarrollo con recarga en caliente |
-| `pnpm build`        | `tsc && tsc-alias -p tsconfig.json`                    | Compila a `build/` con paths resueltos |
-| `pnpm start`        | `node build/index.js`                                  | Corre el build de producción |
-| `pnpm test`         | `jest`                                                  | Corre todos los tests        |
-| `pnpm test:watch`   | `jest --watch`                                          | Tests en modo watch          |
-| `pnpm lint`         | `eslint "src/**/*.ts"`                                  | Lint sobre todo `src/`       |
+Si el módulo llama a un servicio externo (una API de terceros, otro storage), envolvé esa
+llamada con `createCircuitBreaker` (§8) siguiendo el mismo patrón que
+`CloudinaryFileStorage`, en vez de llamarlo "a pelo".
 
 ---
 
-## 17. Siguientes pasos típicos al partir de este template
+## 16. Siguientes pasos típicos al partir de este template
 
 - Reemplazar `InMemoryUserRepository` por un adaptador real (Mongoose/TypeORM/Prisma) sin
-  tocar `application/` ni `infrastructure/http/`.
+  tocar `application/` ni `infrastructure/http/` — `shared/database/` está vacía a propósito,
+  ahí va tu `data-source`/conexión cuando decidas cuál ORM usar.
+- Conectar `UploadFilesUseCase` al `CloudinaryFileStorage` que ya existe en `shared/cloudinary/`
+  (§9) en vez de solo devolver el resumen del archivo.
+- Agregar validación (`validateDTO`) al `PATCH /api/products/:id`, que hoy acepta cualquier
+  body sin chequear nada.
+- Registrar el primer job real con `createCronJob` (§10) — hoy el factory existe pero no hay
+  ningún job dado de alta en `index.ts`.
 - Agregar autenticación (JWT) como middleware + módulo `auth`.
-- Conectar `UploadFilesUseCase` a un storage real (Cloudinary/S3) en vez de solo devolver el
-  resumen.
-- Agregar la base de datos y su red en `docker-compose.yaml` cuando se decida cuál usar.
-- Documentar la API con OpenAPI/Swagger (como se hizo en otros proyectos derivados de este
-  mismo template).
+- Documentar cada endpoint nuevo con su bloque `@swagger` (§11) para que `/api-docs` se
+  mantenga al día.
 
 ---
 
-## 18. Nota
+## 17. Nota
 
-Esta aplicación es de uso libre como punto de partida. Borrá la carpeta `.git` después de
-clonar el repositorio para evitar problemas al subir tu propio backend a tu propio repo.
+Esta aplicación es de uso libre como punto de partida.
