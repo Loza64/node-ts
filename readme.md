@@ -4,7 +4,7 @@ Backend base en **Node.js + TypeScript + Express**, organizado con **Clean Archi
 Arquitectura Hexagonal (Ports & Adapters)**. Pensado como plantilla de arranque: sin base de
 datos real conectada (usa un repositorio en memoria como placeholder), con documentación
 OpenAPI autogenerada, resiliencia (circuit breaker), tareas programadas (cron) y un adaptador
-de almacenamiento de archivos (Cloudinary) ya listo para conectar cuando lo necesites.
+de almacenamiento de archivos (Cloudinary) conectado y protegido por circuit breakers.
 
 ---
 
@@ -20,7 +20,7 @@ de almacenamiento de archivos (Cloudinary) ya listo para conectar cuando lo nece
 | Seguridad HTTP         | Helmet, CORS                                   |
 | Logging                | morgan (HTTP) + debug (interno)                |
 | Subida de archivos     | Multer (memoria)                               |
-| Almacenamiento externo | Cloudinary (adaptador listo, aún no conectado) |
+| Almacenamiento externo | Cloudinary (subida conectada y protegida por circuit breaker) |
 | Resiliencia            | opossum (circuit breaker)                      |
 | Tareas programadas     | node-cron (detrás de un puerto `Scheduler`)    |
 | Documentación API      | swagger-jsdoc + swagger-ui-express + class-validator-jsonschema |
@@ -53,10 +53,8 @@ negocio propia que proteger — son ilustrativos de un patrón (subida de archiv
 no de una entidad completa. `user` es el único módulo con las 3 capas completas y es la
 referencia a seguir cuando agregues un módulo con persistencia real.
 
-> ⚠️ `modules/product/` trae carpetas vacías `domain/` e `infrastructure/persistence/` — quedaron
-> scaffoldeadas para cuando `product` pase a ser un módulo con persistencia real (ver §17,
-> "Nota sobre el módulo product"), pero hoy el único código vivo ahí es
-> `notify-product-updated.use-case.ts` y su controller/routes.
+`product` no tiene todavía entidad ni persistencia: el código del módulo se limita al caso de uso
+de notificación y sus adaptadores HTTP.
 
 ### Use Cases
 
@@ -74,21 +72,21 @@ permite testear toda la lógica de negocio sin levantar Express ni una base de d
   `NodeCronScheduler`).
 
 Hoy `UserRepository` está implementado en memoria (`InMemoryUserRepository`) como placeholder.
-El día que conectes una base de datos real, creás `TypeOrmUserRepository implements
-UserRepository` (o Mongoose, Prisma, etc.) y cambiás **una sola línea** en
-`composition-root.ts`. Ni el use case ni el controller se enteran del cambio.
+Al conectar una base de datos real, creás un adaptador que implemente `UserRepository` y cambias
+su registro en `composition-root.ts`. Ni el use case ni el controller se enteran del cambio.
 
 ### Composition Root
 
-`src/composition-root.ts` es el único archivo que conoce simultáneamente las interfaces y sus
-implementaciones concretas: aquí se instancian los repositorios/adaptadores y se inyectan "a
-mano" (constructor injection) en los use cases y controllers, sin framework de DI. Hoy arma los
-módulos `user`, `file-upload`, `notification` y `product`, y comparte una única instancia de
-`SocketPublisherNotification` entre `notification` y `product`. **No** instancia todavía ningún
-`Scheduler` (ver §10).
+`src/composition-root.ts` es el único archivo que registra interfaces, implementaciones y valores
+de configuración con Awilix. El contenedor resuelve las dependencias de constructores usando
+`InjectionMode.CLASSIC`; los parámetros deben llamarse igual que los registros del contenedor.
+Repositorios, adaptadores, casos de uso y controladores se registran como singletons. Así,
+`notification` y `product` reciben la misma instancia de `SocketPublisherNotification`.
+**No** se instancia todavía ningún `Scheduler` desde el contenedor (ver §10).
 
-`src/app.ts` arma el `container` (llamando a `buildContainer()`), monta las rutas de cada
-módulo bajo `/api` y expone la documentación interactiva en `/api-docs`.
+`src/app.ts` acepta un contenedor para compartir durante el arranque o crea uno cuando se llama
+sin argumentos (como en las pruebas). Monta las rutas bajo `/api` y la documentación en
+`/api-docs`.
 
 ---
 
@@ -100,7 +98,8 @@ src/
 │   └── express/index.d.ts          # Extiende Request con `files?` y `validatedQuery?`
 ├── app.ts                          # Crea y configura la app Express (createApp)
 ├── app.spec.ts                     # Test de integración con supertest
-├── composition-root.ts             # DI manual: instancia repos/use cases/controllers
+├── composition-root.ts             # Registros Awilix y tipos del contenedor
+├── composition-root.spec.ts         # Verifica resolución y ciclo de vida singleton
 ├── index.ts                        # Entry point: crea httpServer, monta sockets, escucha PORT
 ├── swagger.ts                      # Arma el spec OpenAPI (swagger-jsdoc) a partir de los DTOs y comentarios @swagger
 ├── interfaces/
@@ -184,7 +183,7 @@ src/
 3. `httpServer.listen(env.PORT, ...)` levanta todo junto.
 4. `app.ts` (`createApp`):
    - Registra `reflect-metadata` (requerido por `class-validator`/`class-transformer`).
-   - `buildContainer()` instancia todos los repos/use cases/controllers (DI manual).
+   - `buildContainer()` registra repositorios, adaptadores, casos de uso y controllers en Awilix.
    - Middlewares globales, en orden: `helmet()` → `cors()` → `express.json()` →
      `express.urlencoded()` → `morgan('dev')`.
    - Monta el router de la API bajo `/api`.
@@ -203,7 +202,7 @@ src/
 | GET    | `/api/health/hello`           | Health check simple                                                          |
 | GET    | `/api/health/circuit-breakers`| Estado y estadísticas de todos los circuit breakers registrados             |
 | POST   | `/api/users`                   | Crea un usuario (valida DTO, hashea password, evita duplicados por email)   |
-| POST   | `/api/files/upload`            | Sube uno o varios archivos (multipart/form-data), devuelve su metadata      |
+| POST   | `/api/files/upload`            | Sube archivos a Cloudinary y devuelve su metadata y URLs                    |
 | GET    | `/api/notifications/notify`    | Dispara un `broadcast()` por socket a todos los conectados                  |
 | PATCH  | `/api/products/:id`            | Actualiza un producto de ejemplo y emite por socket a la sala `product:<id>`|
 | GET    | `/api-docs`                     | Swagger UI, documentación interactiva de la API                            |
@@ -245,19 +244,31 @@ propósito, incluso aunque alguien accidentalmente hiciera `res.json(user)` en v
   `shared/config/express.config.ts`). Si se excede, `upload-file.middleware.ts` responde
   `400` con el mensaje de Multer.
 - Solo procesa la request si el `Content-Type` incluye `multipart/form-data`; si no, sigue de
-  largo con `next()` sin tocar nada.
-- **No hay persistencia real todavía**: `UploadFilesUseCase.execute()` solo devuelve un resumen
-  (`name`, `size`, `mimetype`) de cada archivo recibido. Los bytes viven en memoria
-  (`multer.memoryStorage()`) y se descartan al terminar el request — el adaptador de Cloudinary
-  ya existe (§9) pero **no está conectado** a este use case.
+  largo con `next()` y el controlador responde `400` si no recibió archivos.
+- Los bytes se reciben en memoria (`multer.memoryStorage()`) y se envían a Cloudinary; la
+  respuesta incluye metadata y URLs públicas. No se guarda una fila de base de datos porque la
+  plantilla todavía no configura una base de datos.
+- La operación de Cloudinary está protegida por su propio circuit breaker; ante circuito abierto
+  o timeout, el middleware de errores devuelve `503`.
 
 ```http
 POST /api/files/upload
 Content-Type: multipart/form-data; boundary=...
 ```
-Respuesta 200:
+Respuesta 201:
 ```json
-{ "total": 2, "files": [{ "name": "foto.png", "size": 20481, "mimetype": "image/png" }, ...] }
+{
+  "total": 1,
+  "files": [{
+    "name": "foto.png",
+    "size": 20481,
+    "mimetype": "image/png",
+    "publicId": "uploads/foto",
+    "url": "http://res.cloudinary.com/...",
+    "secureUrl": "https://res.cloudinary.com/...",
+    "resourceType": "image"
+  }]
+}
 ```
 
 ### Regla de negocio: `GET /api/notifications/notify` y `PATCH /api/products/:id`
@@ -467,11 +478,10 @@ aquí — no hace falta registrar nada a mano.
 **Adaptador**: `CloudinaryFileStorage` (`cloudinary.adapter.ts`) — implementa el puerto contra
 la API real de Cloudinary, con un circuit breaker independiente por operación (§8).
 
-> ⚠️ **Este adaptador existe pero todavía no está conectado a ningún módulo.**
-> `UploadFilesUseCase` (file-upload) hoy solo lee la metadata del archivo en memoria y la
-> devuelve — no llama a `CloudinaryFileStorage`. Conectarlo es uno de los "siguientes pasos"
-> típicos (§16): inyectás `CloudinaryFileStorage` en el use case y reemplazás el resumen plano
-> por el resultado real de `storage.upload(file, env.CLOUDINARY_FOLDER)`.
+El adaptador se inyecta en `UploadFilesUseCase` desde `composition-root.ts`. Cada archivo se sube
+a `CLOUDINARY_FOLDER`; la respuesta incluye su `publicId`, URL segura y tipo de recurso. Configura
+las credenciales de Cloudinary en `.env` para usar el endpoint; los tests del caso de uso usan un
+doble y no llaman al servicio externo.
 
 ### Regla de negocio
 
@@ -484,13 +494,9 @@ la API real de Cloudinary, con un circuit breaker independiente por operación (
 - Si el circuito está abierto, cualquier llamada (`upload`/`destroy`/`setTags`) falla con un
   `AppError('...no está disponible en este momento...', 503)` en vez de colgar el request.
 
-```ts
-// Ejemplo de cómo conectarlo en composition-root.ts el día que lo actives:
-import { CloudinaryFileStorage } from './shared/cloudinary/cloudinary.adapter';
-
-const fileStorage = new CloudinaryFileStorage();
-const uploadFilesUseCase = new UploadFilesUseCase(fileStorage, env.CLOUDINARY_FOLDER);
-```
+La instancia concreta y la carpeta de destino se configuran en `composition-root.ts`; el caso de
+uso depende del puerto `FileStorage`, así que en otros proyectos puedes inyectar otro adaptador
+sin cambiar la lógica de la aplicación.
 
 ---
 
@@ -572,15 +578,11 @@ Tres piezas trabajando juntas:
    archivos `*.routes.ts` (ver ejemplo en `health.routes.ts`).
 3. **`app.ts`**: monta `swagger-ui-express` en `/api-docs` con ese spec.
 
-> ⚠️ **Importante — imports rotos en `schemas.ts`.** Hoy `schemas.ts` importa, además de
-> `IdRefDto` y los DTOs de `pagination-query.dto.ts`, DTOs de un módulo `category` y de DTOs
-> `create-product.dto` / `update-product.dto` / `product-query.dto` dentro de `modules/product/`.
-> Ninguno de esos archivos existe en el árbol actual de `src/` (`modules/product/` solo tiene
-> `notify-product-updated.use-case.ts` y su controller/routes; no hay ningún `modules/category/`)
-> — esos imports van a romper la resolución de módulos al arrancar el server o al correr
-> `schemas.ts`. Antes de dar por buena esta sección, hay que **crear los DTOs de `category` y
-> `product` que faltan siguiendo el patrón de `CreateUserDto`** (ver §6 y §15) **o quitar esos
-> imports de `schemas.ts`** hasta que ese módulo exista de verdad.
+`schemas.ts` importa los DTOs que actualmente participan en la generación de esquemas
+(`IdRefDto`, los DTOs de paginación y `CreateUserDto`). Cuando agregues un DTO nuevo que deba
+aparecer en Swagger, impórtalo allí; los módulos opcionales que todavía no existan no deben
+mantener imports anticipados, ya que el build debe seguir funcionando con la plantilla tal como
+se distribuye.
 
 ### Cómo documentar un endpoint nuevo
 
@@ -678,6 +680,10 @@ Se registra en `composition-root.ts` reutilizando la **misma instancia** de
 
 `shared/config/env.ts` centraliza y tipa las variables de entorno (llama a `dotenv.config()`):
 
+Para desarrollo local o Docker, crea `.env` a partir de `.env.example` y ajusta sus valores.
+`.env` está excluido de Git; las variables de base de datos no se incluyen porque este template
+no tiene una conexión ni un adaptador de persistencia configurados.
+
 ```ts
 env.PORT                          // number, default 4000
 env.ORIGIN                        // string | undefined (para CORS; admite lista separada por comas)
@@ -738,8 +744,8 @@ CB_VOLUME_THRESHOLD=5
 
 ## 14. Testing
 
-Tres niveles de ejemplo ya incluidos, los tres sobre el módulo `user` (el único con las 3 capas
-completas):
+La suite incluye pruebas unitarias del módulo `user`, pruebas de integración HTTP y pruebas de
+adaptadores compartidos:
 
 | Nivel                  | Archivo                          | Qué prueba                                                   |
 |------------------------|-----------------------------------|-----------------------------------------------------------------|
@@ -772,8 +778,9 @@ Seguí `user/` como plantilla si el módulo necesita persistencia real:
    `:id` numérico, enganchá `validateIdParam` con `router.param('id', validateIdParam)` (§6).
    Agregá el bloque `@swagger` en las rutas para que aparezca en `/api-docs` (§11), e importá
    el DTO en `shared/swagger/schemas.ts` si querés que su schema se documente ahí.
-5. Registrar todo en `composition-root.ts` (instanciar e inyectar) y montar el router en
-   `interfaces/http/routes.ts`.
+5. Añadir los tipos y registros Awilix en `Cradle` y `composition-root.ts`, verificando que los
+   nombres de los parámetros del constructor coincidan con los registros; resolver el controller
+   desde el contenedor y montar el router en `interfaces/http/routes.ts`.
 
 Si el módulo llama a un servicio externo (una API de terceros, otro storage), envolvé esa
 llamada con `createCircuitBreaker` (§8) siguiendo el mismo patrón que
@@ -785,19 +792,12 @@ llamada con `createCircuitBreaker` (§8) siguiendo el mismo patrón que
 
 ## 16. Siguientes pasos típicos al partir de este template
 
-- Reemplazar `InMemoryUserRepository` por un adaptador real (Mongoose/TypeORM/Prisma) sin
-  tocar `application/` ni `infrastructure/http/` — `shared/database/` está vacía a propósito;
-  ahí va tu `data-source`/conexión (con sus propias env vars tipadas en `env.ts`, ver §13)
-  cuando decidas cuál ORM usar.
-- Conectar `UploadFilesUseCase` al `CloudinaryFileStorage` que ya existe en `shared/cloudinary/`
-  (§9) en vez de solo devolver el resumen del archivo.
+- Reemplazar `InMemoryUserRepository` por un adaptador de persistencia adecuado para el proyecto
+  (por ejemplo, Mongoose, TypeORM o Prisma) sin acoplar los casos de uso a ese adaptador.
 - Agregar validación (`validateDTO` + `validateIdParam`) al `PATCH /api/products/:id`, que hoy
   acepta cualquier body y cualquier `:id` sin chequear nada.
-- Terminar (o crear) los módulos `category` y `product` con persistencia real: `schemas.ts` ya
-  importa sus DTOs (`create-category.dto`, `update-category.dto`, `create-product.dto`,
-  `update-product.dto`, `product-query.dto`) pero esos archivos **no existen todavía** — hoy
-  eso rompe el arranque de Swagger (§11). Las carpetas vacías `modules/product/domain/` e
-  `modules/product/infrastructure/persistence/` ya están scaffoldeadas para ese trabajo.
+- Añadir los dominios y módulos de negocio que requiera el proyecto; `product` es solo un ejemplo
+  de notificación en tiempo real y no representa un CRUD implementado.
 - Registrar el primer job real con `NodeCronScheduler` (§10) — hoy el puerto/adaptador existen
   y están testeados, pero `composition-root.ts`/`index.ts` no instancian ningún `Scheduler`
   (por ejemplo, una limpieza periódica de fotos huérfanas en Cloudinary, con su propia env var
@@ -811,11 +811,9 @@ llamada con `createCircuitBreaker` (§8) siguiendo el mismo patrón que
 ## 17. Nota sobre el módulo `product`
 
 `modules/product/` hoy solo tiene el caso de uso de ejemplo `NotifyProductUpdatedUseCase` (ver
-§5 y §12) — no hay entidad, repositorio ni persistencia. Las carpetas `domain/` e
-`infrastructure/persistence/` existen vacías como scaffold para cuando este módulo pase a tener
-las 3 capas completas (siguiendo `user/` como referencia, §15). Hasta entonces, tratalo como el
-resto de los módulos "ilustrativos" (`file-upload`, `notification`): útil para ver el patrón de
-Socket.IO en acción, no como base de un CRUD real todavía.
+§5 y §12) — no hay entidad, repositorio ni persistencia. Trátalo como un módulo demostrativo para
+Socket.IO, no como un CRUD. Cuando el proyecto necesite gestionar productos, agrega las capas y
+contratos correspondientes siguiendo sus requisitos; la estructura no presupone esos módulos.
 
 ---
 

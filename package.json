@@ -15,6 +15,7 @@
   "author": "Loza64",
   "license": "ISC",
   "dependencies": {
+    "awilix": "^13.0.5",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",

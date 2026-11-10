@@ -1,7 +1,7 @@
 FROM node:22-alpine AS builder
 
 RUN apk add --no-cache python3 make g++ libc6-compat
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@12.14.0 --activate
 
 WORKDIR /app
 

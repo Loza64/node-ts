@@ -3,7 +3,7 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { buildContainer } from './composition-root';
+import { buildContainer, Container } from './composition-root';
 import { buildApiRouter } from './interfaces/http/routes';
 import { errorHandler } from './shared/middlewares/error-handler.middleware';
 import { corsConfig, jsonConfig, urlEncodeConfig } from './shared/config/express.config';
@@ -11,9 +11,8 @@ import { corsConfig, jsonConfig, urlEncodeConfig } from './shared/config/express
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
 
-export const createApp = (): Express => {
+export const createApp = (container: Container = buildContainer()): Express => {
   const app = express();
-  const container = buildContainer();
 
   app.use(helmet());
   app.use(cors(corsConfig));
@@ -28,5 +27,3 @@ export const createApp = (): Express => {
 
   return app;
 };
-
-export default createApp();

@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      awilix:
+        specifier: ^13.0.5
+        version: 13.0.5
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1178,6 +1181,10 @@ packages:
 
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
+
+  awilix@13.0.5:
+    resolution: {integrity: sha512-ORtca6suBdYA1FyTzqHEZDvEuUwo3lPDDBRm7GrzHgi6STESzJKdBtpqfTzObdMj1NGQUWX6k26E3EbQaGJX5Q==}
+    engines: {node: '>=20.0.0'}
 
   babel-jest@30.5.2:
     resolution: {integrity: sha512-ES8WeJ2fNWPEDunyAtUfJ12nHyaWUloCHdkfK2oW5uSoQSUmjNKdWiGaXJITJwvFEWoD/evHEg/QoCXAvLaQqQ==}
@@ -3909,6 +3916,10 @@ snapshots:
   asap@2.0.6: {}
 
   asynckit@0.4.0: {}
+
+  awilix@13.0.5:
+    dependencies:
+      fast-glob: 3.3.3
 
   babel-jest@30.5.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1):
     dependencies:
