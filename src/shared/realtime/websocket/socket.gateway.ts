@@ -1,8 +1,8 @@
-import { Server, Socket } from 'socket.io';
-import { Server as HttpServer } from 'http';
+import { Server, type Socket } from 'socket.io';
+import { type Server as HttpServer } from 'http';
 import { corsConfig } from '../../config/express.config';
 import { socketLog } from '../../logger/logger';
-import { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData } from './socket.types';
+import { type ClientToServerEvents, type InterServerEvents, type ServerToClientEvents, type SocketData } from './socket.types';
 
 export type AppServer = Server<
   ClientToServerEvents,
@@ -20,16 +20,30 @@ export const initSocket = (httpServer: HttpServer): AppServer => {
   io.on('connection', (socket: AppSocket) => {
     socketLog(`Connected: ${socket.id}`);
 
+    // join/leave pueden ser async (ej. con el adapter de Redis): se manejan sus errores
+    // para que un rechazo no termine en un unhandledRejection que tumbe el proceso.
     socket.on('join', (room, callback) => {
-      socket.join(room);
-      socketLog(`${socket.id} joined: ${room}`);
-      callback?.(true);
+      Promise.resolve(socket.join(room))
+        .then(() => {
+          socketLog(`${socket.id} joined: ${room}`);
+          callback?.(true);
+        })
+        .catch((err: unknown) => {
+          socketLog(`${socket.id} failed to join ${room}: %O`, err);
+          callback?.(false);
+        });
     });
 
     socket.on('leave', (room, callback) => {
-      socket.leave(room);
-      socketLog(`${socket.id} left: ${room}`);
-      callback?.(true);
+      Promise.resolve(socket.leave(room))
+        .then(() => {
+          socketLog(`${socket.id} left: ${room}`);
+          callback?.(true);
+        })
+        .catch((err: unknown) => {
+          socketLog(`${socket.id} failed to leave ${room}: %O`, err);
+          callback?.(false);
+        });
     });
 
     socket.on('event', ({ room, payload }) => {
@@ -55,6 +69,6 @@ export const initSocket = (httpServer: HttpServer): AppServer => {
 };
 
 export const getSocketIO = (): AppServer => {
-  if (!io) throw new Error('Socket.IO has not been initialized');
+  if (!io) {throw new Error('Socket.IO has not been initialized');}
   return io;
 };

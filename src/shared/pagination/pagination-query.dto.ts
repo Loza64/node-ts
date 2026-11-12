@@ -18,7 +18,7 @@ export class PaginationQueryDto {
 
 export class SearchQueryDto extends PaginationQueryDto {
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(100)
   search?: string;

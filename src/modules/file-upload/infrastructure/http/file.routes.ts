@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { uploadFile } from '../../../../shared/middlewares/upload-file.middleware';
-import { FileController } from './file.controller';
+import { type FileController } from './file.controller';
 
 export const buildFileRouter = (controller: FileController): Router => {
   const router = Router();

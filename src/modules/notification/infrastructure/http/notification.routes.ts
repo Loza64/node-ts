@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { NotificationController } from './notification.controller';
+import { type NotificationController } from './notification.controller';
 
 export const buildNotificationRouter = (controller: NotificationController): Router => {
   const router = Router();

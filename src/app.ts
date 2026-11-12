@@ -1,9 +1,9 @@
 import 'reflect-metadata';
-import express, { Express } from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { buildContainer, Container } from './composition-root';
+import { buildContainer, type Container } from './composition-root';
 import { buildApiRouter } from './interfaces/http/routes';
 import { errorHandler } from './shared/middlewares/error-handler.middleware';
 import { corsConfig, jsonConfig, urlEncodeConfig } from './shared/config/express.config';

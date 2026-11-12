@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { CreateUserUseCase } from '../../application/create-user.use-case';
+import { type Request, type Response, type NextFunction } from 'express';
+import { type CreateUserUseCase } from '../../application/create-user.use-case';
+import { type CreateUserDto } from '../../application/create-user.dto';
 
 /**
  * El controller es un "adaptador de entrada" (input adapter).
@@ -12,7 +13,8 @@ export class UserController {
 
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = await this.createUserUseCase.execute(req.body);
+      // req.body ya fue validado y transformado por validateDTO(CreateUserDto) en la ruta
+      const user = await this.createUserUseCase.execute(req.body as CreateUserDto);
       res.status(201).json({ message: 'User created', data: user.toPublic() });
     } catch (err) {
       next(err);

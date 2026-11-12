@@ -1,4 +1,4 @@
-import { User } from './user.entity';
+import { type User } from './user.entity';
 
 /**
  * Puerto de salida (output port). El dominio y la capa de aplicación

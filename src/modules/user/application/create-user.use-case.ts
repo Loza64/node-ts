@@ -1,8 +1,8 @@
 import { AppError } from '../../../shared/errors/AppError';
 import { encryptPass } from '../../../shared/utils/bcrypt.util';
 import { User } from '../domain/user.entity';
-import { UserRepository } from '../domain/user.repository';
-import { CreateUserDto } from './create-user.dto';
+import { type UserRepository } from '../domain/user.repository';
+import { type CreateUserDto } from './create-user.dto';
 
 /**
  * Un Use Case = una acción de negocio, con nombre de negocio (verbo + sustantivo).

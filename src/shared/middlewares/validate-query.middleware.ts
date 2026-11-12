@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import { ClassConstructor } from 'class-transformer/types/interfaces';
-import { NextFunction, Request, Response } from 'express';
+import { type ClassConstructor } from 'class-transformer/types/interfaces';
+import { type NextFunction, type Request, type Response } from 'express';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { flattenValidationErrors } from './validation-errors.util';

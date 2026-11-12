@@ -1,6 +1,6 @@
-import cron, { ScheduledTask } from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { errorLog, serverLog } from '../logger/logger';
-import { CronJob, Scheduler } from './scheduler.port';
+import { type CronJob, type Scheduler } from './scheduler.port';
 
 interface RegisteredJob {
   job: CronJob;
@@ -16,9 +16,9 @@ export class NodeCronScheduler implements Scheduler {
       throw new Error(`Expresión cron inválida para el job "${job.name}": "${job.cronExpression}"`);
     }
 
-    const task = cron.schedule(job.cronExpression, this.toTickHandler(job), {
+    // node-cron v4: createTask crea la tarea sin iniciarla (reemplaza `scheduled: false`)
+    const task = cron.createTask(job.cronExpression, this.toTickHandler(job), {
       name: job.name,
-      scheduled: false,
     });
 
     this.registeredJobs.push({ job, task });
@@ -26,11 +26,22 @@ export class NodeCronScheduler implements Scheduler {
   }
 
   start(): void {
-    this.registeredJobs.forEach(({ task }) => task.start());
+    this.registeredJobs.forEach(({ job, task }) => this.safely(job.name, 'start', () => task.start()));
   }
 
   stop(): void {
-    this.registeredJobs.forEach(({ task }) => task.stop());
+    this.registeredJobs.forEach(({ job, task }) => this.safely(job.name, 'stop', () => task.stop()));
+  }
+
+  /** node-cron v4 puede devolver una promesa en start/stop: un fallo se registra en vez de tumbar el proceso. */
+  private safely(jobName: string, action: string, fn: () => void | Promise<void>): void {
+    try {
+      Promise.resolve(fn()).catch((err: unknown) => {
+        errorLog('Job "%s": fallo al hacer %s: %O', jobName, action, err);
+      });
+    } catch (err) {
+      errorLog('Job "%s": fallo al hacer %s: %O', jobName, action, err);
+    }
   }
 
   private toTickHandler(job: CronJob): () => Promise<void> {

@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+import { type Request, type Response } from 'express';
 import { UserController } from './user.controller';
-import { CreateUserUseCase } from '../../application/create-user.use-case';
+import { type CreateUserUseCase } from '../../application/create-user.use-case';
 import { User } from '../../domain/user.entity';
 
 describe('UserController', () => {

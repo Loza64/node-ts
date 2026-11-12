@@ -19,7 +19,7 @@ const bootstrap = async (): Promise<void> => {
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
+    if (shuttingDown) {return;}
     shuttingDown = true;
     serverLog('Received %s, shutting down gracefully...', signal);
 

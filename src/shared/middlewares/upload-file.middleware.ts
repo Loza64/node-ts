@@ -20,7 +20,9 @@ export const uploadFile = (req: Request, res: Response, next: NextFunction): voi
       return;
     }
     if (err) {
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Error al procesar los archivos',
+      });
       return;
     }
 

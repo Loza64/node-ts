@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Container } from '../../composition-root';
+import { type Container } from '../../composition-root';
 import healthRoutes from '../../modules/health/infrastructure/http/health.routes';
 import { buildUserRouter } from '../../modules/user/infrastructure/http/user.routes';
 import { buildFileRouter } from '../../modules/file-upload/infrastructure/http/file.routes';

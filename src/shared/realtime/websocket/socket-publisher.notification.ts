@@ -1,4 +1,4 @@
-import { SocketPublisher } from '../socket-publisher.port';
+import { type SocketPublisher } from '../socket-publisher.port';
 import { getSocketIO } from './socket.gateway';
 
 export class SocketPublisherNotification implements SocketPublisher {

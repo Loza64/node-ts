@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import { AppError } from '../../../../shared/errors/AppError';
-import { UploadFilesUseCase } from '../../application/upload-files.use-case';
+import { type UploadFilesUseCase } from '../../application/upload-files.use-case';
 
 export class FileController {
   constructor(private readonly uploadFilesUseCase: UploadFilesUseCase) {}

@@ -1,20 +1,20 @@
 /// <reference types="jest" />
 
 const mockTask = { start: jest.fn(), stop: jest.fn() };
-const mockSchedule = jest.fn().mockReturnValue(mockTask);
+const mockCreateTask = jest.fn().mockReturnValue(mockTask);
 const mockValidate = jest.fn().mockReturnValue(true);
 
 jest.mock('node-cron', () => ({
   __esModule: true,
   default: {
-    schedule: mockSchedule,
+    createTask: mockCreateTask,
     validate: mockValidate,
   },
 }));
 
 import cron from 'node-cron';
 import { NodeCronScheduler } from './node-cron.scheduler';
-import { CronJob } from './scheduler.port';
+import { type CronJob } from './scheduler.port';
 
 describe('NodeCronScheduler', () => {
   const makeJob = (overrides: Partial<CronJob> = {}): CronJob => ({
@@ -34,7 +34,7 @@ describe('NodeCronScheduler', () => {
     const scheduler = new NodeCronScheduler();
 
     expect(() => scheduler.register(makeJob({ cronExpression: 'not-a-cron' }))).toThrow(/inválida/);
-    expect(cron.schedule).not.toHaveBeenCalled();
+    expect(cron.createTask).not.toHaveBeenCalled();
   });
 
   it('schedules the job without starting it', () => {
@@ -42,10 +42,10 @@ describe('NodeCronScheduler', () => {
 
     scheduler.register(makeJob());
 
-    expect(mockSchedule).toHaveBeenCalledWith(
+    expect(mockCreateTask).toHaveBeenCalledWith(
       '* * * * *',
       expect.any(Function),
-      expect.objectContaining({ name: 'test-job', scheduled: false }),
+      expect.objectContaining({ name: 'test-job' }),
     );
     expect(mockTask.start).not.toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe('NodeCronScheduler', () => {
     const job = makeJob();
     new NodeCronScheduler().register(job);
 
-    const tick = mockSchedule.mock.calls[0][1] as () => Promise<void>;
+    const tick = mockCreateTask.mock.calls[0][1] as () => Promise<void>;
     await tick();
 
     expect(job.run).toHaveBeenCalledTimes(1);
@@ -87,7 +87,7 @@ describe('NodeCronScheduler', () => {
       ),
     });
     new NodeCronScheduler().register(job);
-    const tick = mockSchedule.mock.calls[0][1] as () => Promise<void>;
+    const tick = mockCreateTask.mock.calls[0][1] as () => Promise<void>;
 
     const firstTick = tick();
     await tick();
@@ -101,7 +101,7 @@ describe('NodeCronScheduler', () => {
   it('does not apply the overlap guard when preventOverlap is false', async () => {
     const job = makeJob({ preventOverlap: false });
     new NodeCronScheduler().register(job);
-    const tick = mockSchedule.mock.calls[0][1] as () => Promise<void>;
+    const tick = mockCreateTask.mock.calls[0][1] as () => Promise<void>;
 
     await Promise.all([tick(), tick()]);
 
@@ -111,7 +111,7 @@ describe('NodeCronScheduler', () => {
   it('logs the failure instead of throwing when a job fails', async () => {
     const job = makeJob({ run: jest.fn().mockRejectedValue(new Error('boom')) });
     new NodeCronScheduler().register(job);
-    const tick = mockSchedule.mock.calls[0][1] as () => Promise<void>;
+    const tick = mockCreateTask.mock.calls[0][1] as () => Promise<void>;
 
     await expect(tick()).resolves.toBeUndefined();
   });

@@ -1,4 +1,4 @@
-import { SocketPublisher } from '../../../shared/realtime/socket-publisher.port';
+import { type SocketPublisher } from '../../../shared/realtime/socket-publisher.port';
 
 export class NotifyAllUseCase {
   constructor(private readonly publisher: SocketPublisher) { }

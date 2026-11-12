@@ -1,4 +1,4 @@
-import { FileStorage } from '../../../shared/cloudinary/cloudinary.port';
+import { type FileStorage } from '../../../shared/cloudinary/cloudinary.port';
 
 export interface UploadedFileSummary {
   name: string;

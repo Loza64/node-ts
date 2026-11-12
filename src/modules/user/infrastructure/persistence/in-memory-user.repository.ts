@@ -1,5 +1,5 @@
-import { User } from '../../domain/user.entity';
-import { UserRepository } from '../../domain/user.repository';
+import { type User } from '../../domain/user.entity';
+import { type UserRepository } from '../../domain/user.repository';
 
 /**
  * Adaptador de salida. Implementa el puerto UserRepository.
@@ -11,12 +11,12 @@ import { UserRepository } from '../../domain/user.repository';
 export class InMemoryUserRepository implements UserRepository {
   private readonly users = new Map<string, User>();
 
-  async findByEmail(email: string): Promise<User | null> {
-    return [...this.users.values()].find((u) => u.email === email) ?? null;
+  findByEmail(email: string): Promise<User | null> {
+    return Promise.resolve([...this.users.values()].find((u) => u.email === email) ?? null);
   }
 
-  async save(user: User): Promise<User> {
+  save(user: User): Promise<User> {
     this.users.set(user.id, user);
-    return user;
+    return Promise.resolve(user);
   }
 }

@@ -1,7 +1,7 @@
-import CircuitBreaker from 'opossum';
-import { UploadApiErrorResponse, UploadApiResponse } from 'cloudinary';
+import type CircuitBreaker from 'opossum';
+import { type UploadApiErrorResponse, type UploadApiResponse } from 'cloudinary';
 import { cloudinary } from './cloudinary.config';
-import { CloudinaryUploadResult, FileStorage } from './cloudinary.port';
+import { type CloudinaryUploadResult, type FileStorage } from './cloudinary.port';
 import { AppError } from '../errors/AppError';
 import { errorLog } from '../logger/logger';
 import { createCircuitBreaker } from '../resilience/circuit-breaker.factory';
@@ -9,7 +9,15 @@ import { isCircuitBreakerFailure } from '../resilience/circuit-breaker.errors';
 
 const SERVICE_UNAVAILABLE_MESSAGE = 'El servicio de almacenamiento de archivos no está disponible en este momento. Intenta de nuevo en unos segundos.';
 
-const isClientError = (err: unknown): boolean => {
+/** Forma de cada transformación eager que devuelve Cloudinary (el SDK la tipa como `any`). */
+interface EagerResult {
+  url: string;
+  secure_url: string;
+  width: number;
+  height: number;
+}
+
+const isClientError =(err: unknown): boolean => {
   const httpCode = (err as Partial<UploadApiErrorResponse> | undefined)?.http_code;
   return typeof httpCode === 'number' && httpCode < 500;
 };
@@ -59,9 +67,16 @@ export class CloudinaryFileStorage implements FileStorage {
         },
         (error?: UploadApiErrorResponse, result?: UploadApiResponse) => {
           if (error || !result) {
-            reject(error ?? new Error('Cloudinary upload failed'));
+            // Se rechaza siempre con un Error real (stack trace) conservando http_code para el errorFilter
+            reject(
+              error
+                ? Object.assign(new Error(error.message), error)
+                : new Error('Cloudinary upload failed'),
+            );
             return;
           }
+
+          const eager = (result.eager ?? []) as EagerResult[];
 
           resolve({
             publicId: result.public_id,
@@ -74,7 +89,7 @@ export class CloudinaryFileStorage implements FileStorage {
             height: result.height,
             bytes: result.bytes,
             tags: result.tags ?? [],
-            eager: (result.eager ?? []).map((e: NonNullable<UploadApiResponse['eager']>[number]) => ({
+            eager: eager.map((e) => ({
               url: e.url,
               secureUrl: e.secure_url,
               width: e.width,

@@ -1,4 +1,4 @@
-import CircuitBreaker from 'opossum';
+import type CircuitBreaker from 'opossum';
 import { circuitBreakerLog } from '../logger/logger';
 
 export type CircuitState = 'closed' | 'open' | 'halfOpen';
@@ -27,8 +27,8 @@ export const registerCircuitBreaker = (name: string, breaker: CircuitBreaker<unk
 };
 
 const resolveState = (breaker: CircuitBreaker<unknown[], unknown>): CircuitState => {
-  if (breaker.opened) return 'open';
-  if (breaker.halfOpen) return 'halfOpen';
+  if (breaker.opened) {return 'open';}
+  if (breaker.halfOpen) {return 'halfOpen';}
   return 'closed';
 };
 

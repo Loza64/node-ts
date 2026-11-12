@@ -1,4 +1,4 @@
-import { CloudinaryUploadResult, FileStorage } from '../../../shared/cloudinary/cloudinary.port';
+import { type CloudinaryUploadResult, type FileStorage } from '../../../shared/cloudinary/cloudinary.port';
 import { UploadFilesUseCase } from './upload-files.use-case';
 
 describe('UploadFilesUseCase', () => {

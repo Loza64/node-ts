@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { NotifyAllUseCase } from '../../application/notify-all.use-case';
+import { type Request, type Response, type NextFunction } from 'express';
+import { type NotifyAllUseCase } from '../../application/notify-all.use-case';
 
 export class NotificationController {
   constructor(private readonly notifyAllUseCase: NotifyAllUseCase) {}

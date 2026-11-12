@@ -1,5 +1,5 @@
 import { CreateUserUseCase } from './create-user.use-case';
-import { UserRepository } from '../domain/user.repository';
+import { type UserRepository } from '../domain/user.repository';
 import { User } from '../domain/user.entity';
 
 describe('CreateUserUseCase', () => {
